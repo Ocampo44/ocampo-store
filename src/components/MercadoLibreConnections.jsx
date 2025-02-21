@@ -1,0 +1,288 @@
+import React, { useEffect, useState } from "react";
+import {
+  collection,
+  onSnapshot,
+  setDoc,
+  doc,
+  getDoc,
+} from "firebase/firestore";
+import { db } from "../firebaseConfig";
+
+// Función para generar code_verifier y code_challenge (PKCE)
+const generateCodeVerifierAndChallenge = async () => {
+  const array = new Uint8Array(32);
+  window.crypto.getRandomValues(array);
+  const codeVerifier = btoa(String.fromCharCode(...array))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  const hashBuffer = await window.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(codeVerifier)
+  );
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const base64Hash = btoa(String.fromCharCode(...hashArray))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  return { codeVerifier, codeChallenge: base64Hash };
+};
+
+// Función para obtener el perfil del usuario desde MercadoLibre
+const fetchUserProfile = async (accessToken) => {
+  try {
+    const response = await fetch(
+      `https://api.mercadolibre.com/users/me?access_token=${accessToken}`
+    );
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    return null;
+  }
+};
+
+// Función para validar el token: retorna true si es válido, false en caso contrario.
+const checkTokenValidity = async (accessToken) => {
+  try {
+    const response = await fetch(
+      `https://api.mercadolibre.com/users/me?access_token=${accessToken}`
+    );
+    const data = await response.json();
+    return data && data.id ? true : false;
+  } catch (error) {
+    console.error("Token validation error:", error);
+    return false;
+  }
+};
+
+const MercadoLibreConnections = () => {
+  const [accounts, setAccounts] = useState([]);
+  const [status, setStatus] = useState("");
+  const [tokenStatuses, setTokenStatuses] = useState({});
+
+  // Inicia la autenticación para conectar (o renovar) la cuenta.
+  const iniciarAutenticacion = async () => {
+    const { codeVerifier, codeChallenge } = await generateCodeVerifierAndChallenge();
+    localStorage.setItem("code_verifier", codeVerifier);
+    const authUrl = `https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=${encodeURIComponent(
+      "https://www.ocampostore.store/mercadolibre"
+    )}&code_challenge=${codeChallenge}&code_challenge_method=S256&scope=offline_access%20read%20write`;
+    window.location.href = authUrl;
+  };
+
+  // Función para renovar token de una cuenta en particular.
+  // Se guarda el ID de la cuenta a renovar en localStorage y se inicia el flujo.
+  const renovarToken = (accountId) => {
+    localStorage.setItem("renewAccountId", accountId);
+    iniciarAutenticacion();
+  };
+
+  // Función para intercambiar el código de autorización por el token.
+  const exchangeCodeForToken = async (code) => {
+    const codeVerifier = localStorage.getItem("code_verifier");
+    if (!codeVerifier) {
+      console.error("No se encontró code_verifier");
+      return null;
+    }
+    const data = new URLSearchParams();
+    data.append("grant_type", "authorization_code");
+    data.append("client_id", "8505590495521677");
+    data.append("client_secret", "Ps3qGnQHLgllwWjcjV0HuDxgBAwYFjLL");
+    data.append("code", code);
+    data.append("redirect_uri", "https://www.ocampostore.store/mercadolibre");
+    data.append("code_verifier", codeVerifier);
+
+    try {
+      const response = await fetch("https://api.mercadolibre.com/oauth/token", {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: data,
+      });
+      const tokenData = await response.json();
+      return tokenData && tokenData.access_token ? tokenData : null;
+    } catch (error) {
+      console.error("Error al intercambiar el código por token:", error);
+      return null;
+    }
+  };
+
+  // Procesa el código en la URL: intercambia por token y guarda/actualiza el usuario.
+  useEffect(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const code = queryParams.get("code");
+
+    if (code) {
+      const processCode = async () => {
+        setStatus("Procesando código de autorización...");
+        const tokenData = await exchangeCodeForToken(code);
+        if (!tokenData) {
+          setStatus("Error al obtener token.");
+          return;
+        }
+        const profileData = await fetchUserProfile(tokenData.access_token);
+        if (!profileData || !profileData.id) {
+          setStatus("Error al obtener perfil del usuario.");
+          return;
+        }
+        const profileId = profileData.id.toString();
+        // Si se está renovando, se usa el ID almacenado; de lo contrario, el ID del perfil.
+        const renewAccountId = localStorage.getItem("renewAccountId");
+        const accountDocId = renewAccountId ? renewAccountId : profileId;
+        const userDocRef = doc(db, "mercadolibreUsers", accountDocId);
+        await setDoc(
+          userDocRef,
+          { token: tokenData, profile: profileData, code },
+          { merge: true }
+        );
+        setStatus(renewAccountId ? "Token renovado exitosamente" : "Cuenta conectada exitosamente");
+        if (renewAccountId) localStorage.removeItem("renewAccountId");
+      };
+      processCode();
+      // Limpiar la URL para evitar reprocesamiento
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  // Escucha cambios en Firestore para obtener las cuentas conectadas.
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
+      const acc = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      }));
+      // Ordena las cuentas alfabéticamente por nickname.
+      acc.sort((a, b) => {
+        const nameA = a.profile?.nickname || "";
+        const nameB = b.profile?.nickname || "";
+        return nameA.localeCompare(nameB);
+      });
+      setAccounts(acc);
+    });
+    return () => unsub();
+  }, []);
+
+  // Verifica la validez de cada token y actualiza el estado (activo/inactivo).
+  useEffect(() => {
+    const updateTokenStatuses = async () => {
+      const statuses = {};
+      for (const account of accounts) {
+        const active = await checkTokenValidity(account.token?.access_token);
+        statuses[account.id] = active;
+      }
+      setTokenStatuses(statuses);
+    };
+    if (accounts.length > 0) {
+      updateTokenStatuses();
+    }
+  }, [accounts]);
+
+  return (
+    <div style={styles.container}>
+      <h1 style={styles.title}>Conexiones con MercadoLibre</h1>
+      <button style={styles.connectButton} onClick={iniciarAutenticacion}>
+        Conectar cuenta de MercadoLibre
+      </button>
+      {status && <p style={styles.status}>{status}</p>}
+      <table style={styles.table}>
+        <thead>
+          <tr>
+            <th style={styles.th}>Nombre</th>
+            <th style={styles.th}>ID MercadoLibre</th>
+            <th style={styles.th}>Estado</th>
+            <th style={styles.th}>Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {accounts.map((account) => (
+            <tr
+              key={account.id}
+              style={{
+                backgroundColor: tokenStatuses[account.id] ? "#d4edda" : "#f8d7da",
+              }}
+            >
+              <td style={styles.td}>
+                {account.profile?.nickname || "Sin Nombre"}
+              </td>
+              <td style={styles.td}>{account.id}</td>
+              <td style={styles.td}>
+                {tokenStatuses[account.id] ? "Activo" : "Inactivo"}
+              </td>
+              <td style={styles.td}>
+                <button
+                  style={styles.renewButton}
+                  onClick={() => renovarToken(account.id)}
+                >
+                  Renovar Token
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const styles = {
+  container: {
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+    maxWidth: "800px",
+    margin: "20px auto",
+    padding: "20px",
+    backgroundColor: "#ffffff",
+    borderRadius: "8px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+  },
+  title: {
+    textAlign: "center",
+    color: "#333",
+    marginBottom: "20px",
+  },
+  connectButton: {
+    backgroundColor: "#f1c40f",
+    color: "#333",
+    border: "none",
+    padding: "10px 20px",
+    fontSize: "1em",
+    borderRadius: "4px",
+    cursor: "pointer",
+    display: "block",
+    margin: "0 auto 20px auto",
+  },
+  status: {
+    textAlign: "center",
+    marginBottom: "10px",
+    color: "#333",
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+    marginTop: "20px",
+  },
+  th: {
+    border: "1px solid #ddd",
+    padding: "8px",
+    backgroundColor: "#f2f2f2",
+    textAlign: "left",
+  },
+  td: {
+    border: "1px solid #ddd",
+    padding: "8px",
+  },
+  renewButton: {
+    backgroundColor: "#3498db",
+    color: "#fff",
+    border: "none",
+    padding: "6px 12px",
+    borderRadius: "4px",
+    cursor: "pointer",
+  },
+};
+
+export default MercadoLibreConnections;

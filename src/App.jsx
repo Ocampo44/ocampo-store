@@ -30,8 +30,8 @@ import Compras from "./components/Compras"; // Lista de compras
 import AddCompraForm from "./components/AddCompraForm"; // Agregar compra
 import EditCompraForm from "./components/EditCompraForm"; // Editar compra
 
-// Importar componente de MercadoLibre
-import MercadoLibre from "./components/MercadoLibre";
+// Importar componente actualizado de MercadoLibre para gestionar conexiones
+import MercadoLibreConnections from "./components/MercadoLibreConnections";
 
 function App() {
   // Estados de la aplicación
@@ -476,8 +476,8 @@ function App() {
               path="/compras/editar/:id"
               element={<EditCompraForm warehouses={warehouses} productosDisponibles={products} />}
             />
-            {/* RUTA PARA MERCADOLIBRE */}
-            <Route path="/mercadolibre" element={<MercadoLibre />} />
+            {/* RUTA PARA MERCADOLIBRE - Se usa el nuevo componente de conexiones */}
+            <Route path="/mercadolibre" element={<MercadoLibreConnections />} />
           </Routes>
         </div>
       </div>
