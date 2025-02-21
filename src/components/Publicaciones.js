@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
-import { collection, onSnapshot } from "firebase/firestore";
+import { 
+  collection, 
+  onSnapshot, 
+  setDoc, 
+  doc, 
+  getDocs, 
+  query, 
+  orderBy 
+} from "firebase/firestore";
 
 const Publicaciones = () => {
   const [publicaciones, setPublicaciones] = useState([]);
@@ -12,9 +20,9 @@ const Publicaciones = () => {
     publicationId: "",
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10; // Items por página en la UI
+  const pageSize = 50; // Mostrar 50 productos por pestaña
 
-  // Escuchar las cuentas conectadas en Firestore
+  // Escuchar las cuentas conectadas en Firestore (colección mercadolibreUsers)
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, "mercadolibreUsers"),
@@ -35,11 +43,46 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para obtener todas las publicaciones de una cuenta mediante paginación en la API
+  // Función para guardar o actualizar las publicaciones en Firestore
+  const savePublicacionesToDB = async (publicacionesArr) => {
+    for (const pub of publicacionesArr) {
+      try {
+        // Se usa el id de la publicación como id del documento
+        await setDoc(
+          doc(db, "publicaciones", pub.id.toString()),
+          {
+            ...pub,
+            updatedAt: new Date().toISOString(), // marca de tiempo de actualización
+          },
+          { merge: true }
+        );
+      } catch (error) {
+        console.error("Error al guardar publicación en DB:", pub.id, error);
+      }
+    }
+  };
+
+  // Función para cargar publicaciones desde Firestore (ordenadas, por ejemplo, por updatedAt)
+  const loadPublicacionesFromDB = async () => {
+    try {
+      const q = query(
+        collection(db, "publicaciones"),
+        orderBy("updatedAt", "desc")
+      );
+      const querySnapshot = await getDocs(q);
+      const pubs = querySnapshot.docs.map((docSnap) => docSnap.data());
+      setPublicaciones(pubs);
+      setCurrentPage(1);
+    } catch (error) {
+      console.error("Error al cargar publicaciones desde DB", error);
+    }
+  };
+
+  // Función para obtener (y guardar) las publicaciones desde la API
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
-    const limit = 50; // Máximo permitido por la API
+    const limit = 50; // máximo permitido por la API
     for (const account of accounts) {
       // Usamos el id del perfil si existe o el id de la cuenta
       const sellerId = account.profile?.id || account.id;
@@ -47,9 +90,9 @@ const Publicaciones = () => {
       if (!sellerId || !accessToken) continue;
 
       try {
-        // Primera llamada para obtener el total de publicaciones usando el endpoint de usuario
+        // Usamos el endpoint de usuario para traer todas las publicaciones
         const firstResponse = await fetch(
-          `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=0`,
+          `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=0&status=all`,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -67,10 +110,9 @@ const Publicaciones = () => {
         console.log(`Cuenta ${account.id} - Total publicaciones: ${total}`);
         let offset = 0;
 
-        // Bucle para paginar la petición a la API
         while (offset < total) {
           const pagedResponse = await fetch(
-            `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=${offset}`,
+            `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=${offset}&status=all`,
             {
               headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -85,10 +127,9 @@ const Publicaciones = () => {
           }
           const pagedData = await pagedResponse.json();
           let pagedResults = pagedData.results || [];
-          // Agregar información adicional a cada publicación
           pagedResults = pagedResults.map((item) => ({
             ...item,
-            estado: "active",
+            estado: item.status || "active", // usa el status que retorna la API o define uno por defecto
             accountName: account.profile?.nickname || "Sin Nombre",
           }));
           allPublicaciones = allPublicaciones.concat(pagedResults);
@@ -102,8 +143,10 @@ const Publicaciones = () => {
         );
       }
     }
-    setPublicaciones(allPublicaciones);
-    setCurrentPage(1); // Reinicia la paginación
+    // Guardar o actualizar en Firestore
+    await savePublicacionesToDB(allPublicaciones);
+    // Luego, recargar desde la DB (esto te permite ver nuevas publicaciones o actualizaciones)
+    await loadPublicacionesFromDB();
     setLoading(false);
   };
 
@@ -126,7 +169,7 @@ const Publicaciones = () => {
     return matchesTitulo && matchesAccount && matchesId;
   });
 
-  // Paginación en la UI
+  // Paginación en la UI (50 items por pestaña)
   const totalPages = Math.ceil(filteredPublicaciones.length / pageSize);
   const paginatedPublicaciones = filteredPublicaciones.slice(
     (currentPage - 1) * pageSize,
@@ -142,7 +185,7 @@ const Publicaciones = () => {
     <div style={styles.container}>
       <h1 style={styles.title}>Publicaciones de Usuarios Activos</h1>
       <button onClick={fetchPublicaciones} style={styles.fetchButton}>
-        Traer Publicaciones
+        Traer Publicaciones (Nuevos)
       </button>
       <div style={styles.filterContainer}>
         <input
