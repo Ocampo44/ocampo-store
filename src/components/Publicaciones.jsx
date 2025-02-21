@@ -11,8 +11,6 @@ const Publicaciones = () => {
     account: "",
     publicationId: "",
   });
-  // Nuevo estado para seleccionar el filtro de estado de la publicación
-  const [itemStatus, setItemStatus] = useState("active");
 
   // Escuchar las cuentas conectadas en Firestore
   useEffect(() => {
@@ -37,7 +35,7 @@ const Publicaciones = () => {
     setLoading(true);
     let allPublicaciones = [];
     for (const account of accounts) {
-      // Se obtiene el sellerId a partir del perfil (ID real del vendedor)
+      // Se obtiene el sellerId a partir del perfil, ya que es el id real del vendedor
       const sellerId = account.profile?.id;
       const accessToken = account.token?.access_token;
       if (!sellerId || !accessToken) {
@@ -46,13 +44,15 @@ const Publicaciones = () => {
       }
 
       try {
-        // Construimos la URL incluyendo el parámetro de estado
-        const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=${itemStatus}`;
-        const response = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
+        // Se utiliza el endpoint recomendado para obtener las publicaciones de un vendedor
+        const response = await fetch(
+          `https://api.mercadolibre.com/users/${sellerId}/items/search`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        );
         if (!response.ok) {
           console.error(
             `Error al obtener publicaciones de la cuenta ${account.id}: ${response.status}`
@@ -61,13 +61,13 @@ const Publicaciones = () => {
         }
         const data = await response.json();
         const results = data.results || [];
-        const publicacionesConDatos = results.map((item) => ({
+        // Se agregan datos adicionales para mostrar en la tabla
+        const activePublicaciones = results.map((item) => ({
           ...item,
-          // Si el ítem trae su propio status lo usamos; de lo contrario, usamos el filtro aplicado
-          estado: item.status || itemStatus,
+          estado: "active",
           accountName: account.profile?.nickname || "Sin Nombre",
         }));
-        allPublicaciones = allPublicaciones.concat(publicacionesConDatos);
+        allPublicaciones = allPublicaciones.concat(activePublicaciones);
       } catch (error) {
         console.error("Error al obtener publicaciones para la cuenta", account.id, error);
       }
@@ -80,11 +80,6 @@ const Publicaciones = () => {
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
-  };
-
-  // Manejo del cambio en el estado de publicación (active, paused, closed, all)
-  const handleStatusChange = (e) => {
-    setItemStatus(e.target.value);
   };
 
   const filteredPublicaciones = publicaciones.filter((pub) => {
@@ -100,18 +95,7 @@ const Publicaciones = () => {
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Publicaciones de Usuarios</h1>
-      <div style={{ marginBottom: "20px", textAlign: "center" }}>
-        <label>
-          Estado de publicación:{" "}
-          <select value={itemStatus} onChange={handleStatusChange}>
-            <option value="active">Activas</option>
-            <option value="paused">Pausadas</option>
-            <option value="closed">Cerradas</option>
-            <option value="all">Todas</option>
-          </select>
-        </label>
-      </div>
+      <h1 style={styles.title}>Publicaciones de Usuarios Activos</h1>
       <button onClick={fetchPublicaciones} style={styles.fetchButton}>
         Traer Publicaciones
       </button>
