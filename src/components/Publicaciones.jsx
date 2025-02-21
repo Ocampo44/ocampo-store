@@ -11,10 +11,11 @@ const Publicaciones = () => {
     account: "",
     publicationId: "",
   });
-  // Estado para la pestaña seleccionada: "active", "paused", "closed" o "all"
-  const [selectedStatus, setSelectedStatus] = useState("active");
+  // Usamos una pestaña para seleccionar el estado a consultar:
+  // Puedes elegir "active", "paused", "closed" o "all"
+  const [selectedStatus, setSelectedStatus] = useState("all");
 
-  // Escuchar las cuentas conectadas en Firestore
+  // Escucha las cuentas conectadas en Firestore
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       if (snapshot && snapshot.docs) {
@@ -22,7 +23,7 @@ const Publicaciones = () => {
           id: docSnap.id,
           ...docSnap.data(),
         }));
-        // Filtrar cuentas que tengan un token de acceso válido
+        // Filtra cuentas que tengan un token válido
         const validAccounts = acc.filter(
           (account) => account.token?.access_token
         );
@@ -33,8 +34,8 @@ const Publicaciones = () => {
   }, []);
 
   /**
-   * Función alternativa para obtener publicaciones usando search_type=scan y scroll_id
-   * Esta función hará llamadas sucesivas hasta que scroll_id sea null.
+   * Función que utiliza search_type=scan para obtener todos los ítems de una cuenta
+   * para un estado dado. Se basa en scroll_id para paginar hasta agotar los resultados.
    */
   const fetchPublicacionesForAccountAndStatusScan = async (
     sellerId,
@@ -42,67 +43,55 @@ const Publicaciones = () => {
     status
   ) => {
     let results = [];
-    // Construir la URL base (limit se establece en 100, el máximo permitido)
-    const baseUrl = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=${status}&search_type=scan&limit=100`;
+    // URL base con search_type=scan y un límite de 100 (máximo permitido)
+    const baseUrl = `https://api.mercadolibre.com/users/${sellerId}/items/search?search_type=scan&status=${status}&limit=100`;
     let url = baseUrl;
-    let scrollId = null;
-
     while (true) {
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!response.ok) {
-        console.error(
-          `Error para seller ${sellerId} con status ${status}: ${response.status}`
-        );
+        console.error(`Error para seller ${sellerId} con status ${status}: ${response.status}`);
         break;
       }
       const data = await response.json();
-      const items = data.results || [];
-      results = results.concat(items);
-      scrollId = data.scroll_id;
-      // Si no hay scroll_id, se han obtenido todos los registros
-      if (!scrollId) break;
-      // Construir la URL para la siguiente llamada usando el scroll_id obtenido
-      url = `${baseUrl}&scroll_id=${encodeURIComponent(scrollId)}`;
+      results = results.concat(data.results || []);
+      // Si no se devuelve scroll_id, ya no hay más registros
+      if (!data.scroll_id) break;
+      // Actualizamos la URL con el scroll_id para la siguiente llamada
+      url = `${baseUrl}&scroll_id=${encodeURIComponent(data.scroll_id)}`;
     }
     return results;
   };
 
   /**
-   * Función para obtener publicaciones según el estado seleccionado (usando la alternativa scan)
+   * Función principal para obtener publicaciones.
+   * Dependiendo de la pestaña seleccionada se obtienen registros de uno o varios estados.
    */
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
-    // Si se selecciona "all", buscamos en los tres estados; de lo contrario, solo en el seleccionado
+    // Si se selecciona "all", se buscan en varios estados (activos, pausados y cerrados)
     const statusesToFetch =
       selectedStatus === "all"
         ? ["active", "paused", "closed"]
         : [selectedStatus];
 
-    // Recorrer cada cuenta conectada
     for (const account of accounts) {
-      // Usamos el id real del vendedor (de account.profile) y su token
+      // Se usa el id real del vendedor (account.profile?.id)
       const sellerId = account.profile?.id;
       const accessToken = account.token?.access_token;
       if (!sellerId || !accessToken) {
-        console.error(
-          `La cuenta ${account.id} no tiene un sellerId válido o token.`
-        );
+        console.error(`La cuenta ${account.id} no tiene un sellerId válido o token.`);
         continue;
       }
 
-      // Para cada estado, obtenemos todas las publicaciones usando el mecanismo scan
       for (const status of statusesToFetch) {
         try {
-          const items = await fetchPublicacionesForAccountAndStatusScan(
-            sellerId,
-            accessToken,
-            status
-          );
+          const items = await fetchPublicacionesForAccountAndStatusScan(sellerId, accessToken, status);
           const pubs = items.map((item) => ({
             ...item,
+            // Si el ítem no trae el status, asumimos el que consultamos
             estado: item.status || status,
             accountName: account.profile?.nickname || "Sin Nombre",
           }));
@@ -119,26 +108,22 @@ const Publicaciones = () => {
     setLoading(false);
   };
 
-  // Cada vez que cambien las cuentas o la pestaña seleccionada, se ejecuta la búsqueda
+  // Ejecuta la búsqueda cuando cambian las cuentas o la pestaña seleccionada
   useEffect(() => {
     if (accounts.length > 0) {
       fetchPublicaciones();
     }
   }, [selectedStatus, accounts]);
 
-  // Manejo de filtros para buscar por título, cuenta o ID
+  // Manejo de filtros (por título, cuenta o ID)
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
   const filteredPublicaciones = publicaciones.filter((pub) => {
-    const matchesTitulo = pub.title
-      ?.toLowerCase()
-      .includes(filters.titulo.toLowerCase());
-    const matchesAccount = pub.accountName
-      ?.toLowerCase()
-      .includes(filters.account.toLowerCase());
+    const matchesTitulo = pub.title?.toLowerCase().includes(filters.titulo.toLowerCase());
+    const matchesAccount = pub.accountName?.toLowerCase().includes(filters.account.toLowerCase());
     const matchesId = pub.id?.toString().includes(filters.publicationId);
     return matchesTitulo && matchesAccount && matchesId;
   });
@@ -219,11 +204,7 @@ const Publicaciones = () => {
               <tr key={pub.id}>
                 <td style={styles.td}>
                   {pub.pictures && pub.pictures.length > 0 ? (
-                    <img
-                      src={pub.pictures[0].url}
-                      alt={pub.title}
-                      style={{ width: "50px" }}
-                    />
+                    <img src={pub.pictures[0].url} alt={pub.title} style={{ width: "50px" }} />
                   ) : (
                     "Sin imagen"
                   )}
