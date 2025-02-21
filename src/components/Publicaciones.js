@@ -20,7 +20,9 @@ const Publicaciones = () => {
         ...docSnap.data(),
       }));
       // Filtrar cuentas con token válido (activas)
-      const activeAccounts = acc.filter((account) => account.token?.access_token);
+      const activeAccounts = acc.filter(
+        (account) => account.token?.access_token
+      );
       setAccounts(activeAccounts);
     });
     return () => unsub();
@@ -62,7 +64,11 @@ const Publicaciones = () => {
         }));
         allPublicaciones = allPublicaciones.concat(activePublicaciones);
       } catch (error) {
-        console.error("Error al obtener publicaciones para la cuenta", account.id, error);
+        console.error(
+          "Error al obtener publicaciones para la cuenta",
+          account.id,
+          error
+        );
       }
     }
     setPublicaciones(allPublicaciones);
@@ -76,8 +82,12 @@ const Publicaciones = () => {
   };
 
   const filteredPublicaciones = publicaciones.filter((pub) => {
-    const matchesTitulo = pub.title?.toLowerCase().includes(filters.titulo.toLowerCase());
-    const matchesAccount = pub.accountName?.toLowerCase().includes(filters.account.toLowerCase());
+    const matchesTitulo = pub.title
+      ?.toLowerCase()
+      .includes(filters.titulo.toLowerCase());
+    const matchesAccount = pub.accountName
+      ?.toLowerCase()
+      .includes(filters.account.toLowerCase());
     const matchesId = pub.id?.toString().includes(filters.publicationId);
     return matchesTitulo && matchesAccount && matchesId;
   });
