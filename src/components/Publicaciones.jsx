@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
 import { collection, onSnapshot } from "firebase/firestore";
 
-const Publicaciones = () => {
+const PublicacionesActivas = () => {
   const [publicaciones, setPublicaciones] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -10,7 +10,6 @@ const Publicaciones = () => {
     titulo: "",
     account: "",
     publicationId: "",
-    estado: "",
   });
 
   // Escuchar las cuentas conectadas en Firestore
@@ -20,12 +19,14 @@ const Publicaciones = () => {
         id: docSnap.id,
         ...docSnap.data(),
       }));
-      setAccounts(acc);
+      // Filtrar las cuentas que tengan un token válido (consideramos "activas")
+      const activeAccounts = acc.filter((account) => account.token?.access_token);
+      setAccounts(activeAccounts);
     });
     return () => unsub();
   }, []);
 
-  // Obtener las publicaciones para cada cuenta conectada
+  // Obtener solo las publicaciones activas de cada cuenta activa
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let allPublicaciones = [];
@@ -35,30 +36,24 @@ const Publicaciones = () => {
         if (!userId || !accessToken) continue;
 
         try {
-          // Realizar llamadas para publicaciones activas e inactivas
-          const [activeRes, inactiveRes] = await Promise.all([
-            fetch(
-              `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=active`
-            ),
-            fetch(
-              `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=inactive`
-            ),
-          ]);
-          const activeData = await activeRes.json();
-          const inactiveData = await inactiveRes.json();
+          // Se consulta solo las publicaciones activas
+          const response = await fetch(
+            `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=active`
+          );
+          if (!response.ok) {
+            console.error(
+              `Error al obtener publicaciones de la cuenta ${account.id}: ${response.status}`
+            );
+            continue;
+          }
+          const data = await response.json();
 
-          const activePublicaciones = (activeData.results || []).map((item) => ({
+          const activePublicaciones = (data.results || []).map((item) => ({
             ...item,
             estado: "active",
             accountName: account.profile?.nickname || "Sin Nombre",
           }));
-          const inactivePublicaciones = (inactiveData.results || []).map((item) => ({
-            ...item,
-            estado: "inactive",
-            accountName: account.profile?.nickname || "Sin Nombre",
-          }));
-
-          allPublicaciones = allPublicaciones.concat(activePublicaciones, inactivePublicaciones);
+          allPublicaciones = allPublicaciones.concat(activePublicaciones);
         } catch (error) {
           console.error("Error al obtener publicaciones para la cuenta", account.id, error);
         }
@@ -69,30 +64,25 @@ const Publicaciones = () => {
 
     if (accounts.length > 0) {
       fetchPublicaciones();
-    } else {
-      // Si no hay cuentas conectadas, detenemos la carga.
-      setLoading(false);
     }
   }, [accounts]);
 
-  // Manejar el cambio en los filtros
+  // Manejo de filtros para buscar por título, cuenta o ID
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Filtrar las publicaciones según los criterios seleccionados
   const filteredPublicaciones = publicaciones.filter((pub) => {
     const matchesTitulo = pub.title?.toLowerCase().includes(filters.titulo.toLowerCase());
     const matchesAccount = pub.accountName?.toLowerCase().includes(filters.account.toLowerCase());
     const matchesId = pub.id?.toString().includes(filters.publicationId);
-    const matchesEstado = filters.estado ? pub.estado === filters.estado : true;
-    return matchesTitulo && matchesAccount && matchesId && matchesEstado;
+    return matchesTitulo && matchesAccount && matchesId;
   });
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Publicaciones</h1>
+      <h1 style={styles.title}>Publicaciones de Usuarios Activos</h1>
       <div style={styles.filterContainer}>
         <input
           type="text"
@@ -118,16 +108,6 @@ const Publicaciones = () => {
           onChange={handleFilterChange}
           style={styles.filterInput}
         />
-        <select
-          name="estado"
-          value={filters.estado}
-          onChange={handleFilterChange}
-          style={styles.filterInput}
-        >
-          <option value="">Todos los estados</option>
-          <option value="active">Activo</option>
-          <option value="inactive">Inactivo</option>
-        </select>
       </div>
       {loading ? (
         <p>Cargando publicaciones...</p>
@@ -148,7 +128,11 @@ const Publicaciones = () => {
               <tr key={pub.id}>
                 <td style={styles.td}>
                   {pub.pictures && pub.pictures.length > 0 ? (
-                    <img src={pub.pictures[0].url} alt={pub.title} style={{ width: "50px" }} />
+                    <img
+                      src={pub.pictures[0].url}
+                      alt={pub.title}
+                      style={{ width: "50px" }}
+                    />
                   ) : (
                     "Sin imagen"
                   )}
@@ -211,4 +195,4 @@ const styles = {
   },
 };
 
-export default Publicaciones;
+export default PublicacionesActivas;

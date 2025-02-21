@@ -1,7 +1,8 @@
+// App.js
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
-// Importar Firestore, la configuración y funciones necesarias
+// Importar Firestore y configuración
 import { db } from "./firebaseConfig";
 import {
   collection,
@@ -14,7 +15,7 @@ import {
   orderBy,
 } from "firebase/firestore";
 
-// Importar componentes y páginas existentes
+// Importar componentes y páginas
 import Sidebar from "./components/Sidebar";
 import ProductTable from "./components/ProductTable";
 import NewProduct from "./pages/NewProduct";
@@ -26,17 +27,18 @@ import Rubros from "./pages/Rubros";
 import Transferencias from "./pages/Transferencias";
 import NuevaTransferencia from "./pages/NuevaTransferencia";
 import RecepcionarTransferencia from "./pages/RecepcionarTransferencia";
-import Compras from "./components/Compras"; // Lista de compras
-import AddCompraForm from "./components/AddCompraForm"; // Agregar compra
-import EditCompraForm from "./components/EditCompraForm"; // Editar compra
+import Compras from "./components/Compras";
+import AddCompraForm from "./components/AddCompraForm";
+import EditCompraForm from "./components/EditCompraForm";
 
-// Importar componente actualizado de MercadoLibre para gestionar conexiones
+// Componentes para MercadoLibre
 import MercadoLibreConnections from "./components/MercadoLibreConnections";
-// Importar el nuevo componente Publicaciones
+// Si deseas usar el componente de publicaciones activas, también puedes importar ese.
+// import PublicacionesActivas from "./components/PublicacionesActivas";
 import Publicaciones from "./components/Publicaciones";
 
 function App() {
-  // Estados de la aplicación
+  // Estados generales de la aplicación
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
   const [rubros, setRubros] = useState([]);
@@ -99,17 +101,17 @@ function App() {
     return () => unsub();
   }, []);
 
-  // Funciones para productos (Agregar, eliminar, actualizar e importar)
+  // Funciones para manejo de productos
   const handleAddProduct = (newProduct) => {
-    // Se asume que al crear el producto en Firestore se inicializa el campo "stocks"
+    // Se asume que al crear el producto se inicializa el campo "stocks" en Firestore
   };
 
   const handleDeleteProduct = (id) => {
-    // La eliminación se maneja directamente en Firestore
+    // La eliminación se gestiona directamente en Firestore
   };
 
   const handleUpdateProduct = (updatedProduct) => {
-    // La actualización se maneja directamente en Firestore
+    // La actualización se gestiona directamente en Firestore
   };
 
   const handleImportProducts = (importedProducts) => {
@@ -133,7 +135,7 @@ function App() {
     });
   };
 
-  // Función para actualizar el stock de un producto en Firestore
+  // Funciones para actualizar stock y tránsito en Firestore
   const updateProductStockInFirestore = async (productId, warehouseId, newStock) => {
     try {
       console.log(
@@ -151,7 +153,6 @@ function App() {
     }
   };
 
-  // Función para actualizar el tránsito ("En transferencia") en Firestore
   const updateProductTransitInFirestore = async (productId, warehouseId, newTransit) => {
     try {
       console.log(
@@ -169,7 +170,6 @@ function App() {
     }
   };
 
-  // Función auxiliar para actualizar el stock leyendo el producto desde Firestore
   const actualizarStockProducto = async (prodId, warehouseId, itemCantidad, tipoMovimiento) => {
     try {
       const prodDocRef = doc(db, "productos", prodId);
@@ -202,7 +202,7 @@ function App() {
     }
   };
 
-  // Registrar movimiento (manual)
+  // Registrar movimiento manual
   const handleAddMovement = async (newMovement) => {
     try {
       await addDoc(collection(db, "movimientos"), newMovement);
@@ -232,7 +232,7 @@ function App() {
           if (prod) {
             await actualizarStockProducto(prod.id, whId, item.cantidad, mov.tipoMovimiento);
           } else {
-            console.error("Movimiento importado: No se encontró el producto para el código:", item.codigoProducto);
+            console.error("No se encontró el producto para el código:", item.codigoProducto);
           }
         }
       }
@@ -244,14 +244,12 @@ function App() {
   // ======================================================
   // TRANSFERENCIAS
   // ======================================================
-  // Al crear una transferencia se descuenta el stock del almacén de origen y se suma la cantidad
-  // a "transitos" en el almacén destino.
+  // Al crear una transferencia se descuenta el stock del almacén de origen y se suma la cantidad en "transitos" del almacén destino.
   const handleAddTransfer = async (newTransfer, transferItems, idOrigen, idDestino) => {
     const originId = String(idOrigen);
     const destId = String(idDestino);
 
     try {
-      // Guardar la transferencia en Firestore y obtener el ID generado
       const docRef = await addDoc(collection(db, "transferencias"), newTransfer);
       newTransfer.id = docRef.id;
       setTransferencias((prev) => [...prev, newTransfer]);
@@ -261,11 +259,8 @@ function App() {
       return;
     }
 
-    // Actualizar los productos: restar la cantidad transferida del stock en el almacén de origen
-    // y sumar la cantidad transferida al campo "transitos" del almacén destino.
     setProducts((prevProducts) =>
       prevProducts.map((prod) => {
-        // Calcular la cantidad total a transferir para este producto
         const transfQty = transferItems
           .filter(
             (item) =>
@@ -279,12 +274,9 @@ function App() {
         let newStocks = { ...prod.stocks };
         let newTransitos = { ...prod.transitos };
 
-        // Restar la cantidad transferida del stock del almacén de origen
         newStocks[originId] = (newStocks[originId] || 0) - transfQty;
-        // Sumar la cantidad transferida en el campo "transitos" del almacén destino
         newTransitos[destId] = (newTransitos[destId] || 0) + transfQty;
 
-        // Actualizar los documentos en Firestore (esto refrescará la tabla de productos)
         updateProductStockInFirestore(prod.id, originId, Math.max(newStocks[originId], 0));
         updateProductTransitInFirestore(prod.id, destId, newTransitos[destId]);
 
@@ -294,8 +286,8 @@ function App() {
   };
 
   /**
-   * handleRecepcionarTransfer:
-   * Actualiza la recepción de una transferencia, ajusta stocks, transitos y registra el movimiento de recepción.
+   * handleRecepcionarTransfer: Actualiza la recepción de una transferencia,
+   * ajusta stocks y transitos, y registra el movimiento de recepción.
    */
   const handleRecepcionarTransfer = (updatedTransfer) => {
     const oldTransfer = transferencias.find((t) => t.id === updatedTransfer.id) || {};
@@ -366,7 +358,6 @@ function App() {
             },
           ],
         };
-
         handleAddMovement(newMovement);
       }
     });
@@ -378,7 +369,7 @@ function App() {
         <Sidebar />
         <div className="flex-1 p-4 ml-64">
           <Routes>
-            {/* LISTA DE PRODUCTOS */}
+            {/* Rutas para productos */}
             <Route
               path="/productos"
               element={
@@ -391,12 +382,10 @@ function App() {
                 />
               }
             />
-            {/* NUEVO PRODUCTO */}
             <Route
               path="/productos/nuevo"
               element={<NewProduct onAddProduct={handleAddProduct} rubros={rubros} />}
             />
-            {/* EDITAR PRODUCTO */}
             <Route
               path="/productos/editar/:id"
               element={
@@ -407,7 +396,8 @@ function App() {
                 />
               }
             />
-            {/* MOVIMIENTOS */}
+
+            {/* Rutas para movimientos */}
             <Route
               path="/movimientos"
               element={
@@ -429,14 +419,15 @@ function App() {
                 />
               }
             />
-            {/* ALMACENES */}
+
+            {/* Rutas para almacenes y rubros */}
             <Route
               path="/almacenes"
               element={<Almacenes warehouses={warehouses} setWarehouses={setWarehouses} />}
             />
-            {/* RUBROS */}
             <Route path="/rubros" element={<Rubros rubros={rubros} setRubros={setRubros} />} />
-            {/* TRANSFERENCIAS */}
+
+            {/* Rutas para transferencias */}
             <Route
               path="/transferencias"
               element={
@@ -468,7 +459,8 @@ function App() {
                 />
               }
             />
-            {/* RUTAS PARA COMPRAS */}
+
+            {/* Rutas para compras */}
             <Route path="/compras" element={<Compras />} />
             <Route
               path="/compras/agregar"
@@ -478,9 +470,10 @@ function App() {
               path="/compras/editar/:id"
               element={<EditCompraForm warehouses={warehouses} productosDisponibles={products} />}
             />
-            {/* RUTA PARA MERCADOLIBRE - Se usa el componente de conexiones */}
+
+            {/* Rutas para MercadoLibre */}
             <Route path="/mercadolibre" element={<MercadoLibreConnections />} />
-            {/* RUTA PARA PUBLICACIONES */}
+            {/* Rutas para publicaciones (usa Publicaciones o PublicacionesActivas según prefieras) */}
             <Route path="/publicaciones" element={<Publicaciones />} />
           </Routes>
         </div>
