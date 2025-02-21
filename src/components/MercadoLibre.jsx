@@ -2,24 +2,54 @@ import React, { useEffect, useState } from "react";
 import { collection, onSnapshot, addDoc, doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
+// Función para generar code_verifier y code_challenge
+const generateCodeVerifierAndChallenge = async () => {
+  const array = new Uint8Array(32);
+  window.crypto.getRandomValues(array);
+  const codeVerifier = btoa(String.fromCharCode.apply(null, array))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  const hashBuffer = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(codeVerifier));
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const base64Hash = btoa(String.fromCharCode.apply(null, hashArray))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  return { codeVerifier, codeChallenge: base64Hash };
+};
+
 const MercadoLibre = () => {
   const [usuarios, setUsuarios] = useState([]);
-  const [estado, setEstado] = useState("Inactivo"); // para mostrar mensajes de estado
+  const [estado, setEstado] = useState("Inactivo");
 
-  // URL para redirigir a MercadoLibre, con redirect_uri apuntando a /mercadolibre
-  const authUrl =
-    "https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=https://www.ocampostore.store/mercadolibre";
+  // Redirigir a MercadoLibre con PKCE
+  const iniciarAutenticacion = async () => {
+    const { codeVerifier, codeChallenge } = await generateCodeVerifierAndChallenge();
+    localStorage.setItem("code_verifier", codeVerifier);
 
-  // Función para intercambiar el código por un access token
+    const authUrl = `https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=https://www.ocampostore.store/mercadolibre&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+
+    window.location.href = authUrl;
+  };
+
+  // Intercambiar código por token
   const exchangeCodeForToken = async (code) => {
+    const codeVerifier = localStorage.getItem("code_verifier");
+    if (!codeVerifier) {
+      console.error("No se encontró code_verifier en localStorage");
+      return null;
+    }
+
     const data = new URLSearchParams();
     data.append("grant_type", "authorization_code");
     data.append("client_id", "8505590495521677");
     data.append("client_secret", "Ps3qGnQHLgllwWjcjV0HuDxgBAwYFjLL");
     data.append("code", code);
     data.append("redirect_uri", "https://www.ocampostore.store/mercadolibre");
-    // Si usas PKCE, descomenta y agrega el code_verifier:
-    // data.append("code_verifier", "TU_CODE_VERIFIER");
+    data.append("code_verifier", codeVerifier);
 
     try {
       const response = await fetch("https://api.mercadolibre.com/oauth/token", {
@@ -30,20 +60,25 @@ const MercadoLibre = () => {
         },
         body: data,
       });
+
       const tokenData = await response.json();
-      console.log("Access token recibido:", tokenData);
-      return tokenData;
+      if (tokenData.access_token) {
+        console.log("Access token recibido:", tokenData);
+        return tokenData;
+      } else {
+        console.error("Error al recibir el token:", tokenData);
+        return null;
+      }
     } catch (error) {
       console.error("Error al intercambiar el código por token:", error);
       return null;
     }
   };
 
-  // Efecto para extraer el código de la URL, guardarlo en Firebase y obtener el token
+  // Guardar código y token en Firebase
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
     const code = queryParams.get("code");
-    console.log("Código obtenido de la URL:", code);
 
     if (code) {
       setEstado("Procesando código de autorización...");
@@ -53,15 +88,16 @@ const MercadoLibre = () => {
           const docRef = await addDoc(collection(db, "mercadolibreUsers"), { code });
           console.log("Código guardado con ID:", docRef.id);
 
-          // Intercambia el código por token
+          // Obtener el token
           const tokenData = await exchangeCodeForToken(code);
           if (!tokenData) {
             setEstado("Error al obtener el token.");
             return;
           }
+
           console.log("Token de acceso:", tokenData);
 
-          // Actualiza el documento para incluir el token
+          // Actualizar documento con el token
           await updateDoc(doc(db, "mercadolibreUsers", docRef.id), { token: tokenData });
           setEstado("Autorización completada y token guardado.");
         } catch (err) {
@@ -71,12 +107,12 @@ const MercadoLibre = () => {
       };
       saveCodeAndToken();
 
-      // Limpiar el parámetro de la URL para evitar reprocesos
+      // Limpiar la URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
-  // Escuchar cambios en la colección de usuarios vinculados en Firebase
+  // Escuchar cambios en Firebase
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const users = snapshot.docs.map((doc) => ({
@@ -94,9 +130,9 @@ const MercadoLibre = () => {
       <p style={styles.subtitle}>
         Conecta tu cuenta para acceder a promociones y administrar tus anuncios.
       </p>
-      <a href={authUrl} style={styles.link}>
-        <button style={styles.button}>Conectar con MercadoLibre</button>
-      </a>
+      <button style={styles.button} onClick={iniciarAutenticacion}>
+        Conectar con MercadoLibre
+      </button>
       <p style={styles.estado}>Estado: {estado}</p>
 
       <h2 style={styles.connectedTitle}>Cuentas Vinculadas</h2>
@@ -115,6 +151,7 @@ const MercadoLibre = () => {
   );
 };
 
+// Estilos
 const styles = {
   container: {
     fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
@@ -131,9 +168,6 @@ const styles = {
     margin: "0 0 30px",
     fontSize: "1.1em",
     color: "#555",
-  },
-  link: {
-    textDecoration: "none",
   },
   button: {
     backgroundColor: "#3483fa",
