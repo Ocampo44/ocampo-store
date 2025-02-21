@@ -6,9 +6,9 @@ const MercadoLibre = () => {
   const [usuarios, setUsuarios] = useState([]);
   const [estado, setEstado] = useState("Inactivo"); // para mostrar mensajes de estado
 
-  // URL para redirigir a MercadoLibre
+  // URL para redirigir a MercadoLibre, con redirect_uri apuntando a /mercadolibre
   const authUrl =
-    "https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=https://www.ocampostore.store/";
+    "https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=https://www.ocampostore.store/mercadolibre";
 
   // Función para intercambiar el código por un access token
   const exchangeCodeForToken = async (code) => {
@@ -17,7 +17,7 @@ const MercadoLibre = () => {
     data.append("client_id", "8505590495521677");
     data.append("client_secret", "Ps3qGnQHLgllwWjcjV0HuDxgBAwYFjLL");
     data.append("code", code);
-    data.append("redirect_uri", "https://www.ocampostore.store/");
+    data.append("redirect_uri", "https://www.ocampostore.store/mercadolibre");
     // Si usas PKCE, descomenta y agrega el code_verifier:
     // data.append("code_verifier", "TU_CODE_VERIFIER");
 
