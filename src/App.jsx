@@ -14,7 +14,7 @@ import {
   orderBy,
 } from "firebase/firestore";
 
-// Importar componentes y páginas
+// Importar componentes y páginas (asegúrate de tener implementados estos archivos)
 import Sidebar from "./components/Sidebar";
 import ProductTable from "./components/ProductTable";
 import NewProduct from "./pages/NewProduct";

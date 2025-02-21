@@ -15,15 +15,17 @@ const Publicaciones = () => {
   // Escuchar las cuentas conectadas en Firestore
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
-      const acc = snapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      }));
-      // Filtrar cuentas con token válido (activas)
-      const activeAccounts = acc.filter(
-        (account) => account.token?.access_token
-      );
-      setAccounts(activeAccounts);
+      if (snapshot && snapshot.docs) {
+        const acc = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        }));
+        // Filtrar cuentas con token válido (activas)
+        const activeAccounts = acc.filter(
+          (account) => account.token?.access_token
+        );
+        setAccounts(activeAccounts);
+      }
     });
     return () => unsub();
   }, []);

@@ -5,7 +5,6 @@ import {
   setDoc,
   doc,
   deleteDoc,
-  getDoc,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
@@ -176,17 +175,19 @@ const MercadoLibreConnections = () => {
   // Escucha cambios en Firestore para obtener las cuentas conectadas.
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
-      const acc = snapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      }));
-      // Ordena las cuentas alfabéticamente por nickname.
-      acc.sort((a, b) => {
-        const nameA = a.profile?.nickname || "";
-        const nameB = b.profile?.nickname || "";
-        return nameA.localeCompare(nameB);
-      });
-      setAccounts(acc);
+      if (snapshot && snapshot.docs) {
+        const acc = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        }));
+        // Ordena las cuentas alfabéticamente por nickname.
+        acc.sort((a, b) => {
+          const nameA = a.profile?.nickname || "";
+          const nameB = b.profile?.nickname || "";
+          return nameA.localeCompare(nameB);
+        });
+        setAccounts(acc);
+      }
     });
     return () => unsub();
   }, []);
