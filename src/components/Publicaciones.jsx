@@ -69,6 +69,9 @@ const Publicaciones = () => {
 
     if (accounts.length > 0) {
       fetchPublicaciones();
+    } else {
+      // Si no hay cuentas conectadas, detenemos la carga.
+      setLoading(false);
     }
   }, [accounts]);
 
