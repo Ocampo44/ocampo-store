@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { collection, onSnapshot, addDoc } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
 const MercadoLibre = () => {
   const [usuarios, setUsuarios] = useState([]);
+  const [estado, setEstado] = useState("Inactivo"); // para mostrar mensajes de estado
 
-  // URL fija para redirigir a MercadoLibre
+  // URL para redirigir a MercadoLibre
   const authUrl =
     "https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=https://www.ocampostore.store/";
 
@@ -24,7 +25,7 @@ const MercadoLibre = () => {
       const response = await fetch("https://api.mercadolibre.com/oauth/token", {
         method: "POST",
         headers: {
-          "accept": "application/json",
+          accept: "application/json",
           "content-type": "application/x-www-form-urlencoded",
         },
         body: data,
@@ -34,33 +35,43 @@ const MercadoLibre = () => {
       return tokenData;
     } catch (error) {
       console.error("Error al intercambiar el código por token:", error);
+      return null;
     }
   };
 
   // Efecto para extraer el código de la URL, guardarlo en Firebase y obtener el token
   useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    const code = query.get("code");
+    const queryParams = new URLSearchParams(window.location.search);
+    const code = queryParams.get("code");
     console.log("Código obtenido de la URL:", code);
+
     if (code) {
-      // Guardar el código en Firebase
-      const saveCode = async () => {
+      setEstado("Procesando código de autorización...");
+      const saveCodeAndToken = async () => {
         try {
+          // Guarda el código en Firestore
           const docRef = await addDoc(collection(db, "mercadolibreUsers"), { code });
           console.log("Código guardado con ID:", docRef.id);
+
+          // Intercambia el código por token
+          const tokenData = await exchangeCodeForToken(code);
+          if (!tokenData) {
+            setEstado("Error al obtener el token.");
+            return;
+          }
+          console.log("Token de acceso:", tokenData);
+
+          // Actualiza el documento para incluir el token
+          await updateDoc(doc(db, "mercadolibreUsers", docRef.id), { token: tokenData });
+          setEstado("Autorización completada y token guardado.");
         } catch (err) {
-          console.error("Error al guardar el código:", err);
+          console.error("Error al guardar el código o el token:", err);
+          setEstado("Error al guardar el código o el token.");
         }
       };
-      saveCode();
+      saveCodeAndToken();
 
-      // Intercambiar el código por un token
-      exchangeCodeForToken(code).then((tokenData) => {
-        console.log("Token de acceso:", tokenData);
-        // Aquí podrías almacenar el token en el estado, enviarlo a tu backend, etc.
-      });
-
-      // Limpiar el parámetro de la URL para evitar duplicados al refrescar
+      // Limpiar el parámetro de la URL para evitar reprocesos
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
@@ -86,6 +97,7 @@ const MercadoLibre = () => {
       <a href={authUrl} style={styles.link}>
         <button style={styles.button}>Conectar con MercadoLibre</button>
       </a>
+      <p style={styles.estado}>Estado: {estado}</p>
 
       <h2 style={styles.connectedTitle}>Cuentas Vinculadas</h2>
       {usuarios.length === 0 ? (
@@ -132,6 +144,11 @@ const styles = {
     borderRadius: "4px",
     cursor: "pointer",
     transition: "background-color 0.3s ease",
+  },
+  estado: {
+    marginTop: "20px",
+    fontSize: "1em",
+    color: "#d35400",
   },
   connectedTitle: {
     marginTop: "40px",
