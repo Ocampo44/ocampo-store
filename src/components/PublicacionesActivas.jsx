@@ -1,12 +1,11 @@
-// src/components/PublicacionesActivas.js
 import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
 import { collection, onSnapshot } from "firebase/firestore";
 
-const PublicacionesActivas = () => {
+const Publicaciones = () => {
   const [publicaciones, setPublicaciones] = useState([]);
   const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({
     titulo: "",
     account: "",
@@ -27,54 +26,47 @@ const PublicacionesActivas = () => {
     return () => unsub();
   }, []);
 
-  // Obtener las publicaciones activas de cada cuenta usando el endpoint /sites/...
-  useEffect(() => {
-    const fetchPublicaciones = async () => {
-      let allPublicaciones = [];
-      for (const account of accounts) {
-        const sellerId = account.profile?.id || account.id;
-        const accessToken = account.token?.access_token;
-        if (!sellerId || !accessToken) continue;
+  // Función para obtener publicaciones de cada cuenta
+  const fetchPublicaciones = async () => {
+    setLoading(true);
+    let allPublicaciones = [];
+    for (const account of accounts) {
+      const sellerId = account.profile?.id || account.id;
+      const accessToken = account.token?.access_token;
+      if (!sellerId || !accessToken) continue;
 
-        // Define el SITE_ID. Ejemplo: "MLM" para México.
-        const siteId = "MLM"; // Cambia este valor según el mercado de la cuenta
+      // Define el SITE_ID. Ejemplo: "MLM" para México.
+      const siteId = "MLM"; // Cambia este valor según el mercado de la cuenta
 
-        try {
-          const response = await fetch(
-            `https://api.mercadolibre.com/sites/${siteId}/search?seller_id=${sellerId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            }
-          );
-          if (!response.ok) {
-            console.error(
-              `Error al obtener publicaciones de la cuenta ${account.id}: ${response.status}`
-            );
-            continue;
+      try {
+        const response = await fetch(
+          `https://api.mercadolibre.com/sites/${siteId}/search?seller_id=${sellerId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
           }
-          const data = await response.json();
-          const activePublicaciones = (data.results || []).map((item) => ({
-            ...item,
-            estado: "active",
-            accountName: account.profile?.nickname || "Sin Nombre",
-          }));
-          allPublicaciones = allPublicaciones.concat(activePublicaciones);
-        } catch (error) {
-          console.error("Error al obtener publicaciones para la cuenta", account.id, error);
+        );
+        if (!response.ok) {
+          console.error(
+            `Error al obtener publicaciones de la cuenta ${account.id}: ${response.status}`
+          );
+          continue;
         }
+        const data = await response.json();
+        const activePublicaciones = (data.results || []).map((item) => ({
+          ...item,
+          estado: "active",
+          accountName: account.profile?.nickname || "Sin Nombre",
+        }));
+        allPublicaciones = allPublicaciones.concat(activePublicaciones);
+      } catch (error) {
+        console.error("Error al obtener publicaciones para la cuenta", account.id, error);
       }
-      setPublicaciones(allPublicaciones);
-      setLoading(false);
-    };
-
-    if (accounts.length > 0) {
-      fetchPublicaciones();
-    } else {
-      setLoading(false);
     }
-  }, [accounts]);
+    setPublicaciones(allPublicaciones);
+    setLoading(false);
+  };
 
   // Manejo de filtros para buscar por título, cuenta o ID
   const handleFilterChange = (e) => {
@@ -92,6 +84,9 @@ const PublicacionesActivas = () => {
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>Publicaciones de Usuarios Activos</h1>
+      <button onClick={fetchPublicaciones} style={styles.fetchButton}>
+        Traer Publicaciones
+      </button>
       <div style={styles.filterContainer}>
         <input
           type="text"
@@ -175,6 +170,17 @@ const styles = {
     color: "#333",
     marginBottom: "20px",
   },
+  fetchButton: {
+    display: "block",
+    margin: "0 auto 20px auto",
+    padding: "10px 20px",
+    fontSize: "1em",
+    backgroundColor: "#3498db",
+    color: "#fff",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer",
+  },
   filterContainer: {
     display: "flex",
     gap: "10px",
@@ -204,4 +210,4 @@ const styles = {
   },
 };
 
-export default PublicacionesActivas;
+export default Publicaciones;

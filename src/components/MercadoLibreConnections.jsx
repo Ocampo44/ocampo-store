@@ -1,4 +1,3 @@
-// src/components/MercadoLibreConnections.js
 import React, { useEffect, useState } from "react";
 import {
   collection,
@@ -76,7 +75,6 @@ const MercadoLibreConnections = () => {
   };
 
   // Función para renovar token de una cuenta en particular.
-  // Se guarda el ID de la cuenta a renovar en localStorage y se inicia el flujo.
   const renovarToken = (accountId) => {
     localStorage.setItem("renewAccountId", accountId);
     iniciarAutenticacion();
