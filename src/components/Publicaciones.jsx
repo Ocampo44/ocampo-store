@@ -23,51 +23,28 @@ const Publicaciones = () => {
           ...docSnap.data(),
         }));
         // Filtrar cuentas con token válido
-        const validAccounts = acc.filter(
+        const activeAccounts = acc.filter(
           (account) => account.token?.access_token
         );
-        setAccounts(validAccounts);
+        setAccounts(activeAccounts);
       }
     });
     return () => unsub();
   }, []);
 
-  // Función para obtener publicaciones con paginación para una cuenta y un estado dado
-  const fetchPublicacionesForAccountAndStatus = async (sellerId, accessToken, status) => {
-    let results = [];
-    let offset = 0;
-    const limit = 50; // Puedes probar con 100 si la API lo permite
-    while (true) {
-      const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=${status}&offset=${offset}&limit=${limit}`;
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!response.ok) {
-        console.error(
-          `Error para seller ${sellerId} con status ${status}: ${response.status}`
-        );
-        break;
-      }
-      const data = await response.json();
-      const items = data.results || [];
-      results = results.concat(items);
-      // Si la cantidad de items obtenidos es menor al límite, se terminó la paginación
-      if (items.length < limit) break;
-      offset += limit;
-    }
-    return results;
-  };
-
-  // Función para obtener publicaciones según el estado seleccionado (con paginación)
+  // Función para obtener publicaciones según el estado seleccionado
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
     // Determinar qué estados se deben buscar según la pestaña seleccionada
-    let statusesToFetch = selectedStatus === "all"
-      ? ["active", "paused", "closed"]
-      : [selectedStatus];
+    let statusesToFetch = [];
+    if (selectedStatus === "all") {
+      statusesToFetch = ["active", "paused", "closed"];
+    } else {
+      statusesToFetch = [selectedStatus];
+    }
 
-    // Para cada cuenta y para cada estado, se hace la paginación
+    // Para cada cuenta y cada estado, hacemos la llamada correspondiente
     for (const account of accounts) {
       const sellerId = account.profile?.id;
       const accessToken = account.token?.access_token;
@@ -80,21 +57,27 @@ const Publicaciones = () => {
 
       for (const status of statusesToFetch) {
         try {
-          const items = await fetchPublicacionesForAccountAndStatus(
-            sellerId,
-            accessToken,
-            status
-          );
-          const publicacionesFetch = items.map((item) => ({
+          const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=${status}`;
+          const response = await fetch(url, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (!response.ok) {
+            console.error(
+              `Error en cuenta ${account.id} para status ${status}: ${response.status}`
+            );
+            continue;
+          }
+          const data = await response.json();
+          const results = data.results || [];
+          const publicacionesFetch = results.map((item) => ({
             ...item,
-            // Se asigna el estado obtenido o se asume el status consultado
             estado: item.status || status,
             accountName: account.profile?.nickname || "Sin Nombre",
           }));
           allPublicaciones = allPublicaciones.concat(publicacionesFetch);
         } catch (error) {
           console.error(
-            `Error al obtener publicaciones de la cuenta ${account.id} para status ${status}:`,
+            `Error al obtener publicaciones de cuenta ${account.id} para status ${status}:`,
             error
           );
         }
@@ -104,7 +87,7 @@ const Publicaciones = () => {
     setLoading(false);
   };
 
-  // Ejecutar la búsqueda cada vez que cambien las cuentas o la pestaña seleccionada
+  // Ejecutar la búsqueda cada vez que cambian la cuenta o la pestaña seleccionada
   useEffect(() => {
     if (accounts.length > 0) {
       fetchPublicaciones();
