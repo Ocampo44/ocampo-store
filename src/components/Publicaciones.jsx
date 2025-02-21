@@ -72,7 +72,7 @@ const Publicaciones = () => {
     return results;
   };
 
-  // Actualiza los ítems cada vez que cambie la cuenta seleccionada o el filtro de estado
+  // Cada vez que cambie la cuenta seleccionada o el filtro de estado, se traen los ítems
   useEffect(() => {
     const account = accounts.find((acc) => acc.id === selectedAccountId);
     if (account) {
@@ -94,27 +94,19 @@ const Publicaciones = () => {
       <h1 style={styles.title}>Gestión de Publicaciones</h1>
       {/* Pestañas de cuentas */}
       <div style={styles.accountTabs}>
-        {accounts.length > 1 ? (
-          accounts.map((account) => (
-            <button
-              key={account.id}
-              onClick={() => setSelectedAccountId(account.id)}
-              style={
-                account.id === selectedAccountId
-                  ? styles.activeAccountTab
-                  : styles.accountTab
-              }
-            >
-              {account.profile?.nickname || account.id}
-            </button>
-          ))
-        ) : accounts.length === 1 ? (
-          <button style={styles.activeAccountTab}>
-            {accounts[0].profile?.nickname || accounts[0].id}
+        {accounts.map((account) => (
+          <button
+            key={account.id}
+            onClick={() => setSelectedAccountId(account.id)}
+            style={
+              account.id === selectedAccountId
+                ? styles.activeAccountTab
+                : styles.accountTab
+            }
+          >
+            {account.profile?.nickname || account.id}
           </button>
-        ) : (
-          <p>No hay cuentas conectadas</p>
-        )}
+        ))}
       </div>
       {/* Pestañas de estado */}
       <div style={styles.stateTabs}>
