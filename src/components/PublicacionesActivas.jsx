@@ -1,3 +1,4 @@
+// src/components/PublicacionesActivas.js
 import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
 import { collection, onSnapshot } from "firebase/firestore";
@@ -36,11 +37,12 @@ const PublicacionesActivas = () => {
         if (!sellerId || !accessToken) continue;
 
         // Define el SITE_ID. Ejemplo: "MLM" para México.
-        const siteId = "MLM"; // Cambia este valor según tu mercado
+        const siteId = "MLM"; // Cambia este valor según el mercado de la cuenta
 
         try {
           const response = await fetch(
-            `https://api.mercadolibre.com/sites/${siteId}/search?seller_id=${sellerId}`, {
+            `https://api.mercadolibre.com/sites/${siteId}/search?seller_id=${sellerId}`,
+            {
               headers: {
                 Authorization: `Bearer ${accessToken}`,
               },
