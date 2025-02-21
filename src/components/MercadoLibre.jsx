@@ -2,18 +2,18 @@ import React, { useEffect, useState } from "react";
 import { collection, onSnapshot, addDoc, doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
-// Función para generar code_verifier y code_challenge
+// Función para generar code_verifier y code_challenge (PKCE)
 const generateCodeVerifierAndChallenge = async () => {
   const array = new Uint8Array(32);
   window.crypto.getRandomValues(array);
-  const codeVerifier = btoa(String.fromCharCode.apply(null, array))
+  const codeVerifier = btoa(String.fromCharCode(...array))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 
   const hashBuffer = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(codeVerifier));
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const base64Hash = btoa(String.fromCharCode.apply(null, hashArray))
+  const base64Hash = btoa(String.fromCharCode(...hashArray))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
@@ -25,17 +25,17 @@ const MercadoLibre = () => {
   const [usuarios, setUsuarios] = useState([]);
   const [estado, setEstado] = useState("Inactivo");
 
-  // Redirigir a MercadoLibre con PKCE
+  // Inicia la autenticación solicitando los permisos que incluyen offline_access
   const iniciarAutenticacion = async () => {
     const { codeVerifier, codeChallenge } = await generateCodeVerifierAndChallenge();
     localStorage.setItem("code_verifier", codeVerifier);
 
-    const authUrl = `https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=https://www.ocampostore.store/mercadolibre&code_challenge=${codeChallenge}&code_challenge_method=S256`;
-
+    // Se añade el parámetro scope con offline_access para que se genere el refresh token
+    const authUrl = `https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=https://www.ocampostore.store/mercadolibre&code_challenge=${codeChallenge}&code_challenge_method=S256&scope=offline_access%20read%20write`;
     window.location.href = authUrl;
   };
 
-  // Intercambiar código por token
+  // Intercambia el código de autorización por el token (incluye refresh token si se solicitó offline_access)
   const exchangeCodeForToken = async (code) => {
     const codeVerifier = localStorage.getItem("code_verifier");
     if (!codeVerifier) {
@@ -60,10 +60,9 @@ const MercadoLibre = () => {
         },
         body: data,
       });
-
       const tokenData = await response.json();
       if (tokenData.access_token) {
-        console.log("Access token recibido:", tokenData);
+        console.log("Token recibido:", tokenData);
         return tokenData;
       } else {
         console.error("Error al recibir el token:", tokenData);
@@ -75,7 +74,7 @@ const MercadoLibre = () => {
     }
   };
 
-  // Guardar código y token en Firebase
+  // Cuando llega el código en la URL, se procesa y se guarda en Firebase junto con el token
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
     const code = queryParams.get("code");
@@ -88,16 +87,15 @@ const MercadoLibre = () => {
           const docRef = await addDoc(collection(db, "mercadolibreUsers"), { code });
           console.log("Código guardado con ID:", docRef.id);
 
-          // Obtener el token
+          // Intercambia el código por el token
           const tokenData = await exchangeCodeForToken(code);
           if (!tokenData) {
             setEstado("Error al obtener el token.");
             return;
           }
-
           console.log("Token de acceso:", tokenData);
 
-          // Actualizar documento con el token
+          // Actualiza el documento con el token (incluye refresh_token si lo hay)
           await updateDoc(doc(db, "mercadolibreUsers", docRef.id), { token: tokenData });
           setEstado("Autorización completada y token guardado.");
         } catch (err) {
@@ -106,13 +104,12 @@ const MercadoLibre = () => {
         }
       };
       saveCodeAndToken();
-
-      // Limpiar la URL
+      // Limpia la URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
-  // Escuchar cambios en Firebase
+  // Escucha cambios en la colección de Firebase para mostrar las cuentas vinculadas
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const users = snapshot.docs.map((doc) => ({
