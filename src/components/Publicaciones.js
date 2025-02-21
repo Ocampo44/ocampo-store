@@ -36,7 +36,7 @@ const Publicaciones = () => {
       if (!sellerId || !accessToken) continue;
 
       // Define el SITE_ID. Ejemplo: "MLM" para México.
-      const siteId = "MLM"; // Cambia este valor según el mercado de la cuenta
+      const siteId = "MLM";
 
       try {
         const response = await fetch(

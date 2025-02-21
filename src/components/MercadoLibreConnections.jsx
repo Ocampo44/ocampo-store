@@ -55,9 +55,7 @@ const checkTokenValidity = async (accessToken) => {
     const response = await fetch(
       `https://api.mercadolibre.com/users/me?access_token=${accessToken}`
     );
-    if (!response.ok) {
-      return false;
-    }
+    if (!response.ok) return false;
     const data = await response.json();
     return data && data.id ? true : false;
   } catch (error) {
@@ -166,7 +164,9 @@ const MercadoLibreConnections = () => {
           { token: tokenData, profile: profileData, code },
           { merge: true }
         );
-        setStatus(renewAccountId ? "Token renovado exitosamente" : "Cuenta conectada exitosamente");
+        setStatus(
+          renewAccountId ? "Token renovado exitosamente" : "Cuenta conectada exitosamente"
+        );
         if (renewAccountId) localStorage.removeItem("renewAccountId");
       };
       processCode();
