@@ -4,6 +4,7 @@ import {
   onSnapshot,
   setDoc,
   doc,
+  deleteDoc,
   getDoc,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
@@ -78,6 +79,17 @@ const MercadoLibreConnections = () => {
   const renovarToken = (accountId) => {
     localStorage.setItem("renewAccountId", accountId);
     iniciarAutenticacion();
+  };
+
+  // Función para eliminar un usuario de Firestore.
+  const eliminarUsuario = async (accountId) => {
+    try {
+      await deleteDoc(doc(db, "mercadolibreUsers", accountId));
+      setStatus("Usuario eliminado exitosamente");
+    } catch (error) {
+      console.error("Error eliminando usuario:", error);
+      setStatus("Error al eliminar el usuario");
+    }
   };
 
   // Función para intercambiar el código de autorización por el token.
@@ -220,6 +232,12 @@ const MercadoLibreConnections = () => {
                 >
                   Renovar Token
                 </button>
+                <button
+                  style={styles.deleteButton}
+                  onClick={() => eliminarUsuario(account.id)}
+                >
+                  Eliminar
+                </button>
               </td>
             </tr>
           ))}
@@ -277,6 +295,15 @@ const styles = {
   },
   renewButton: {
     backgroundColor: "#3498db",
+    color: "#fff",
+    border: "none",
+    padding: "6px 12px",
+    borderRadius: "4px",
+    cursor: "pointer",
+    marginRight: "5px",
+  },
+  deleteButton: {
+    backgroundColor: "#e74c3c",
     color: "#fff",
     border: "none",
     padding: "6px 12px",
