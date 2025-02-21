@@ -31,6 +31,7 @@ const MercadoLibre = () => {
     localStorage.setItem("code_verifier", codeVerifier);
 
     const authUrl = `https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=https://www.ocampostore.store/mercadolibre&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+
     window.location.href = authUrl;
   };
 
@@ -96,11 +97,8 @@ const MercadoLibre = () => {
 
           console.log("Token de acceso:", tokenData);
 
-          // Actualizar documento con el token y el refresh token por separado
-          await updateDoc(doc(db, "mercadolibreUsers", docRef.id), { 
-            token: tokenData,
-            refresh_token: tokenData.refresh_token 
-          });
+          // Actualizar documento con el token
+          await updateDoc(doc(db, "mercadolibreUsers", docRef.id), { token: tokenData });
           setEstado("Autorización completada y token guardado.");
         } catch (err) {
           console.error("Error al guardar el código o el token:", err);
