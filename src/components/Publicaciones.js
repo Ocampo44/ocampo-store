@@ -11,6 +11,8 @@ const Publicaciones = () => {
     account: "",
     publicationId: "",
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10; // Cantidad de items a mostrar por página
 
   // Escuchar las cuentas conectadas en Firestore
   useEffect(() => {
@@ -30,7 +32,7 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para obtener todas las publicaciones de una cuenta mediante paginación
+  // Función para obtener todas las publicaciones de una cuenta mediante paginación en la API
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
@@ -63,7 +65,7 @@ const Publicaciones = () => {
         const total = firstData.paging?.total || 0;
         let offset = 0;
 
-        // Procesamos las páginas de resultados hasta cubrir el total
+        // Bucle para paginar la petición a la API
         while (offset < total) {
           const pagedResponse = await fetch(
             `https://api.mercadolibre.com/sites/${siteId}/search?seller_id=${sellerId}&limit=${limit}&offset=${offset}`,
@@ -99,6 +101,7 @@ const Publicaciones = () => {
       }
     }
     setPublicaciones(allPublicaciones);
+    setCurrentPage(1); // Reinicia la paginación al actualizar
     setLoading(false);
   };
 
@@ -106,8 +109,10 @@ const Publicaciones = () => {
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
+    setCurrentPage(1); // Reinicia la paginación cuando se filtra
   };
 
+  // Filtrar las publicaciones según los filtros aplicados
   const filteredPublicaciones = publicaciones.filter((pub) => {
     const matchesTitulo = pub.title
       ?.toLowerCase()
@@ -118,6 +123,18 @@ const Publicaciones = () => {
     const matchesId = pub.id?.toString().includes(filters.publicationId);
     return matchesTitulo && matchesAccount && matchesId;
   });
+
+  // Calcular los datos para la paginación
+  const totalPages = Math.ceil(filteredPublicaciones.length / pageSize);
+  const paginatedPublicaciones = filteredPublicaciones.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    setCurrentPage(newPage);
+  };
 
   return (
     <div style={styles.container}>
@@ -154,40 +171,61 @@ const Publicaciones = () => {
       {loading ? (
         <p>Cargando publicaciones...</p>
       ) : (
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Imagen</th>
-              <th style={styles.th}>Título</th>
-              <th style={styles.th}>Precio</th>
-              <th style={styles.th}>Estado</th>
-              <th style={styles.th}>ID Publicación</th>
-              <th style={styles.th}>Cuenta</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredPublicaciones.map((pub) => (
-              <tr key={pub.id}>
-                <td style={styles.td}>
-                  {pub.pictures && pub.pictures.length > 0 ? (
-                    <img
-                      src={pub.pictures[0].url}
-                      alt={pub.title}
-                      style={{ width: "50px" }}
-                    />
-                  ) : (
-                    "Sin imagen"
-                  )}
-                </td>
-                <td style={styles.td}>{pub.title}</td>
-                <td style={styles.td}>{pub.price}</td>
-                <td style={styles.td}>{pub.estado}</td>
-                <td style={styles.td}>{pub.id}</td>
-                <td style={styles.td}>{pub.accountName}</td>
+        <>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Imagen</th>
+                <th style={styles.th}>Título</th>
+                <th style={styles.th}>Precio</th>
+                <th style={styles.th}>Estado</th>
+                <th style={styles.th}>ID Publicación</th>
+                <th style={styles.th}>Cuenta</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {paginatedPublicaciones.map((pub) => (
+                <tr key={pub.id}>
+                  <td style={styles.td}>
+                    {pub.pictures && pub.pictures.length > 0 ? (
+                      <img
+                        src={pub.pictures[0].url}
+                        alt={pub.title}
+                        style={{ width: "50px" }}
+                      />
+                    ) : (
+                      "Sin imagen"
+                    )}
+                  </td>
+                  <td style={styles.td}>{pub.title}</td>
+                  <td style={styles.td}>{pub.price}</td>
+                  <td style={styles.td}>{pub.estado}</td>
+                  <td style={styles.td}>{pub.id}</td>
+                  <td style={styles.td}>{pub.accountName}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={styles.pagination}>
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              style={styles.pageButton}
+            >
+              Anterior
+            </button>
+            <span style={styles.pageInfo}>
+              Página {currentPage} de {totalPages}
+            </span>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              style={styles.pageButton}
+            >
+              Siguiente
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
@@ -235,6 +273,7 @@ const styles = {
   table: {
     width: "100%",
     borderCollapse: "collapse",
+    marginBottom: "20px",
   },
   th: {
     border: "1px solid #ddd",
@@ -245,6 +284,25 @@ const styles = {
   td: {
     border: "1px solid #ddd",
     padding: "8px",
+  },
+  pagination: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "15px",
+    marginTop: "20px",
+  },
+  pageButton: {
+    padding: "8px 12px",
+    fontSize: "1em",
+    backgroundColor: "#3498db",
+    color: "#fff",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer",
+  },
+  pageInfo: {
+    fontSize: "1em",
   },
 };
 
