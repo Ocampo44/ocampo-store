@@ -36,22 +36,20 @@ const Publicaciones = () => {
   const fetchPublicacionesForAccountAndStatus = async (sellerId, accessToken, status) => {
     let results = [];
     let offset = 0;
-    const limit = 50; // Puedes probar con 100 si la API lo permite
+    const limit = 100; // Intentamos aumentar el límite a 100
     while (true) {
       const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=${status}&offset=${offset}&limit=${limit}`;
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!response.ok) {
-        console.error(
-          `Error para seller ${sellerId} con status ${status}: ${response.status}`
-        );
+        console.error(`Error para seller ${sellerId} con status ${status}: ${response.status}`);
         break;
       }
       const data = await response.json();
       const items = data.results || [];
       results = results.concat(items);
-      // Si la cantidad de items obtenidos es menor al límite, se terminó la paginación
+      // Si se reciben menos items que el límite, se asume que se terminó la lista
       if (items.length < limit) break;
       offset += limit;
     }
@@ -63,7 +61,7 @@ const Publicaciones = () => {
     setLoading(true);
     let allPublicaciones = [];
     // Determinar qué estados se deben buscar según la pestaña seleccionada
-    let statusesToFetch = selectedStatus === "all"
+    const statusesToFetch = selectedStatus === "all"
       ? ["active", "paused", "closed"]
       : [selectedStatus];
 
@@ -72,19 +70,13 @@ const Publicaciones = () => {
       const sellerId = account.profile?.id;
       const accessToken = account.token?.access_token;
       if (!sellerId || !accessToken) {
-        console.error(
-          `La cuenta ${account.id} no tiene un sellerId válido o token.`
-        );
+        console.error(`La cuenta ${account.id} no tiene un sellerId válido o token.`);
         continue;
       }
 
       for (const status of statusesToFetch) {
         try {
-          const items = await fetchPublicacionesForAccountAndStatus(
-            sellerId,
-            accessToken,
-            status
-          );
+          const items = await fetchPublicacionesForAccountAndStatus(sellerId, accessToken, status);
           const publicacionesFetch = items.map((item) => ({
             ...item,
             // Se asigna el estado obtenido o se asume el status consultado
@@ -93,10 +85,7 @@ const Publicaciones = () => {
           }));
           allPublicaciones = allPublicaciones.concat(publicacionesFetch);
         } catch (error) {
-          console.error(
-            `Error al obtener publicaciones de la cuenta ${account.id} para status ${status}:`,
-            error
-          );
+          console.error(`Error al obtener publicaciones de la cuenta ${account.id} para status ${status}:`, error);
         }
       }
     }
@@ -104,7 +93,7 @@ const Publicaciones = () => {
     setLoading(false);
   };
 
-  // Ejecutar la búsqueda cada vez que cambien las cuentas o la pestaña seleccionada
+  // Ejecutar la búsqueda cada vez que cambian las cuentas o la pestaña seleccionada
   useEffect(() => {
     if (accounts.length > 0) {
       fetchPublicaciones();
