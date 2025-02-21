@@ -96,7 +96,7 @@ const MercadoLibre = () => {
 
           console.log("Token de acceso:", tokenData);
 
-          // Actualizar documento con el token y el refresh token por separado
+          // Actualizar documento con el token completo y guardar el refresh token en un campo aparte
           await updateDoc(doc(db, "mercadolibreUsers", docRef.id), { 
             token: tokenData,
             refresh_token: tokenData.refresh_token 
