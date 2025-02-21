@@ -1,14 +1,12 @@
 {
-  "build": {
-    "use": "@vercel/static-build",
-    "config": {
-      "distDir": "frontend/build"
-    }
-  },
   "rewrites": [
     {
       "source": "/mercadolibre",
-      "destination": "/"
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
