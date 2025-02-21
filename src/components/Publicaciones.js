@@ -30,10 +30,11 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para obtener publicaciones de cada cuenta
+  // Función para obtener todas las publicaciones de una cuenta mediante paginación
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
+    const limit = 100; // límite máximo permitido por la API
     for (const account of accounts) {
       const sellerId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
@@ -43,28 +44,52 @@ const Publicaciones = () => {
       const siteId = "MLM";
 
       try {
-        const response = await fetch(
-          `https://api.mercadolibre.com/sites/${siteId}/search?seller_id=${sellerId}`,
+        // Primera llamada para obtener el total de publicaciones
+        const firstResponse = await fetch(
+          `https://api.mercadolibre.com/sites/${siteId}/search?seller_id=${sellerId}&limit=${limit}&offset=0`,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,
             },
           }
         );
-        if (!response.ok) {
+        if (!firstResponse.ok) {
           console.error(
-            `Error al obtener publicaciones de la cuenta ${account.id}: ${response.status}`
+            `Error al obtener publicaciones de la cuenta ${account.id}: ${firstResponse.status}`
           );
           continue;
         }
-        const data = await response.json();
-        const results = data.results || [];
-        const activePublicaciones = results.map((item) => ({
-          ...item,
-          estado: "active",
-          accountName: account.profile?.nickname || "Sin Nombre",
-        }));
-        allPublicaciones = allPublicaciones.concat(activePublicaciones);
+        const firstData = await firstResponse.json();
+        const total = firstData.paging?.total || 0;
+        let offset = 0;
+
+        // Procesamos las páginas de resultados hasta cubrir el total
+        while (offset < total) {
+          const pagedResponse = await fetch(
+            `https://api.mercadolibre.com/sites/${siteId}/search?seller_id=${sellerId}&limit=${limit}&offset=${offset}`,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+              },
+            }
+          );
+          if (!pagedResponse.ok) {
+            console.error(
+              `Error al obtener publicaciones (offset: ${offset}) para la cuenta ${account.id}: ${pagedResponse.status}`
+            );
+            break;
+          }
+          const pagedData = await pagedResponse.json();
+          let pagedResults = pagedData.results || [];
+          // Agregar información adicional a cada publicación
+          pagedResults = pagedResults.map((item) => ({
+            ...item,
+            estado: "active",
+            accountName: account.profile?.nickname || "Sin Nombre",
+          }));
+          allPublicaciones = allPublicaciones.concat(pagedResults);
+          offset += limit;
+        }
       } catch (error) {
         console.error(
           "Error al obtener publicaciones para la cuenta",
