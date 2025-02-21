@@ -22,7 +22,7 @@ const Publicaciones = () => {
           id: docSnap.id,
           ...docSnap.data(),
         }));
-        // Filtrar cuentas que tengan un token de acceso válido
+        // Filtrar cuentas con token válido
         const validAccounts = acc.filter(
           (account) => account.token?.access_token
         );
@@ -32,86 +32,60 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  /**
-   * Función alternativa para obtener publicaciones usando search_type=scan y scroll_id
-   * Esta función hará llamadas sucesivas hasta que scroll_id sea null.
-   */
-  const fetchPublicacionesForAccountAndStatusScan = async (
-    sellerId,
-    accessToken,
-    status
-  ) => {
+  // Función para obtener publicaciones con paginación para una cuenta y un estado dado
+  const fetchPublicacionesForAccountAndStatus = async (sellerId, accessToken, status) => {
     let results = [];
-    // Construir la URL base (limit se establece en 100, el máximo permitido)
-    const baseUrl = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=${status}&search_type=scan&limit=100`;
-    let url = baseUrl;
-    let scrollId = null;
-
+    let offset = 0;
+    const limit = 100; // Intentamos aumentar el límite a 100
     while (true) {
+      const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=${status}&offset=${offset}&limit=${limit}`;
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!response.ok) {
-        console.error(
-          `Error para seller ${sellerId} con status ${status}: ${response.status}`
-        );
+        console.error(`Error para seller ${sellerId} con status ${status}: ${response.status}`);
         break;
       }
       const data = await response.json();
       const items = data.results || [];
       results = results.concat(items);
-      scrollId = data.scroll_id;
-      // Si no hay scroll_id, se han obtenido todos los registros
-      if (!scrollId) break;
-      // Construir la URL para la siguiente llamada usando el scroll_id obtenido
-      url = `${baseUrl}&scroll_id=${encodeURIComponent(scrollId)}`;
+      // Si se reciben menos items que el límite, se asume que se terminó la lista
+      if (items.length < limit) break;
+      offset += limit;
     }
     return results;
   };
 
-  /**
-   * Función para obtener publicaciones según el estado seleccionado (usando la alternativa scan)
-   */
+  // Función para obtener publicaciones según el estado seleccionado (con paginación)
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
-    // Si se selecciona "all", buscamos en los tres estados; de lo contrario, solo en el seleccionado
-    const statusesToFetch =
-      selectedStatus === "all"
-        ? ["active", "paused", "closed"]
-        : [selectedStatus];
+    // Determinar qué estados se deben buscar según la pestaña seleccionada
+    const statusesToFetch = selectedStatus === "all"
+      ? ["active", "paused", "closed"]
+      : [selectedStatus];
 
-    // Recorrer cada cuenta conectada
+    // Para cada cuenta y para cada estado, se hace la paginación
     for (const account of accounts) {
-      // Usamos el id real del vendedor (de account.profile) y su token
       const sellerId = account.profile?.id;
       const accessToken = account.token?.access_token;
       if (!sellerId || !accessToken) {
-        console.error(
-          `La cuenta ${account.id} no tiene un sellerId válido o token.`
-        );
+        console.error(`La cuenta ${account.id} no tiene un sellerId válido o token.`);
         continue;
       }
 
-      // Para cada estado, obtenemos todas las publicaciones usando el mecanismo scan
       for (const status of statusesToFetch) {
         try {
-          const items = await fetchPublicacionesForAccountAndStatusScan(
-            sellerId,
-            accessToken,
-            status
-          );
-          const pubs = items.map((item) => ({
+          const items = await fetchPublicacionesForAccountAndStatus(sellerId, accessToken, status);
+          const publicacionesFetch = items.map((item) => ({
             ...item,
+            // Se asigna el estado obtenido o se asume el status consultado
             estado: item.status || status,
             accountName: account.profile?.nickname || "Sin Nombre",
           }));
-          allPublicaciones = allPublicaciones.concat(pubs);
+          allPublicaciones = allPublicaciones.concat(publicacionesFetch);
         } catch (error) {
-          console.error(
-            `Error al obtener publicaciones de la cuenta ${account.id} para status ${status}:`,
-            error
-          );
+          console.error(`Error al obtener publicaciones de la cuenta ${account.id} para status ${status}:`, error);
         }
       }
     }
@@ -119,7 +93,7 @@ const Publicaciones = () => {
     setLoading(false);
   };
 
-  // Cada vez que cambien las cuentas o la pestaña seleccionada, se ejecuta la búsqueda
+  // Ejecutar la búsqueda cada vez que cambian las cuentas o la pestaña seleccionada
   useEffect(() => {
     if (accounts.length > 0) {
       fetchPublicaciones();
