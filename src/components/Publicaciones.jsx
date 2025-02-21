@@ -11,8 +11,6 @@ const Publicaciones = () => {
     account: "",
     publicationId: "",
   });
-  // Estado para la pestaña seleccionada: "active", "paused", "closed" o "all"
-  const [selectedStatus, setSelectedStatus] = useState("active");
 
   // Escuchar las cuentas conectadas en Firestore
   useEffect(() => {
@@ -32,20 +30,12 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para obtener publicaciones según el estado seleccionado
+  // Función para obtener solo publicaciones inactivas (status "paused")
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
-    // Determinar qué estados se deben buscar según la pestaña seleccionada
-    let statusesToFetch = [];
-    if (selectedStatus === "all") {
-      statusesToFetch = ["active", "paused", "closed"];
-    } else {
-      statusesToFetch = [selectedStatus];
-    }
-
-    // Para cada cuenta y cada estado, hacemos la llamada correspondiente
     for (const account of accounts) {
+      // Usamos el id real del vendedor obtenido del perfil
       const sellerId = account.profile?.id;
       const accessToken = account.token?.access_token;
       if (!sellerId || !accessToken) {
@@ -55,44 +45,40 @@ const Publicaciones = () => {
         continue;
       }
 
-      for (const status of statusesToFetch) {
-        try {
-          const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=${status}`;
-          const response = await fetch(url, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-          if (!response.ok) {
-            console.error(
-              `Error en cuenta ${account.id} para status ${status}: ${response.status}`
-            );
-            continue;
-          }
-          const data = await response.json();
-          const results = data.results || [];
-          const publicacionesFetch = results.map((item) => ({
-            ...item,
-            estado: item.status || status,
-            accountName: account.profile?.nickname || "Sin Nombre",
-          }));
-          allPublicaciones = allPublicaciones.concat(publicacionesFetch);
-        } catch (error) {
+      try {
+        // Se utiliza el endpoint con el parámetro status=paused para traer solo ítems inactivos
+        const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=paused`;
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+        if (!response.ok) {
           console.error(
-            `Error al obtener publicaciones de cuenta ${account.id} para status ${status}:`,
-            error
+            `Error al obtener publicaciones inactivas de la cuenta ${account.id}: ${response.status}`
           );
+          continue;
         }
+        const data = await response.json();
+        const results = data.results || [];
+        const publicacionesInactivas = results.map((item) => ({
+          ...item,
+          // Se asigna el estado obtenido o se asume "paused"
+          estado: item.status || "paused",
+          accountName: account.profile?.nickname || "Sin Nombre",
+        }));
+        allPublicaciones = allPublicaciones.concat(publicacionesInactivas);
+      } catch (error) {
+        console.error(
+          "Error al obtener publicaciones para la cuenta",
+          account.id,
+          error
+        );
       }
     }
     setPublicaciones(allPublicaciones);
     setLoading(false);
   };
-
-  // Ejecutar la búsqueda cada vez que cambian la cuenta o la pestaña seleccionada
-  useEffect(() => {
-    if (accounts.length > 0) {
-      fetchPublicaciones();
-    }
-  }, [selectedStatus, accounts]);
 
   // Manejo de filtros para buscar por título, cuenta o ID
   const handleFilterChange = (e) => {
@@ -113,35 +99,10 @@ const Publicaciones = () => {
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Gestión de Publicaciones</h1>
-      {/* Pestañas para seleccionar el estado */}
-      <div style={styles.tabs}>
-        <button
-          style={selectedStatus === "active" ? styles.activeTab : styles.tab}
-          onClick={() => setSelectedStatus("active")}
-        >
-          Activas
-        </button>
-        <button
-          style={selectedStatus === "paused" ? styles.activeTab : styles.tab}
-          onClick={() => setSelectedStatus("paused")}
-        >
-          Pausadas
-        </button>
-        <button
-          style={selectedStatus === "closed" ? styles.activeTab : styles.tab}
-          onClick={() => setSelectedStatus("closed")}
-        >
-          Cerradas
-        </button>
-        <button
-          style={selectedStatus === "all" ? styles.activeTab : styles.tab}
-          onClick={() => setSelectedStatus("all")}
-        >
-          Todas
-        </button>
-      </div>
-      {/* Filtros de búsqueda */}
+      <h1 style={styles.title}>Publicaciones Inactivas</h1>
+      <button onClick={fetchPublicaciones} style={styles.fetchButton}>
+        Traer Publicaciones Inactivas
+      </button>
       <div style={styles.filterContainer}>
         <input
           type="text"
@@ -216,7 +177,7 @@ const styles = {
     maxWidth: "1000px",
     margin: "20px auto",
     padding: "20px",
-    backgroundColor: "#fff",
+    backgroundColor: "#ffffff",
     borderRadius: "8px",
     boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
   },
@@ -225,22 +186,11 @@ const styles = {
     color: "#333",
     marginBottom: "20px",
   },
-  tabs: {
-    display: "flex",
-    justifyContent: "center",
-    marginBottom: "20px",
-  },
-  tab: {
+  fetchButton: {
+    display: "block",
+    margin: "0 auto 20px auto",
     padding: "10px 20px",
-    margin: "0 5px",
-    backgroundColor: "#f0f0f0",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-  },
-  activeTab: {
-    padding: "10px 20px",
-    margin: "0 5px",
+    fontSize: "1em",
     backgroundColor: "#3498db",
     color: "#fff",
     border: "none",
