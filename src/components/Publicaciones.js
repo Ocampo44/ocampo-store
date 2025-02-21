@@ -16,19 +16,22 @@ const Publicaciones = () => {
 
   // Escuchar las cuentas conectadas en Firestore
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
-      if (snapshot && snapshot.docs) {
-        const acc = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        }));
-        // Filtrar cuentas con token válido (activas)
-        const activeAccounts = acc.filter(
-          (account) => account.token?.access_token
-        );
-        setAccounts(activeAccounts);
+    const unsub = onSnapshot(
+      collection(db, "mercadolibreUsers"),
+      (snapshot) => {
+        if (snapshot && snapshot.docs) {
+          const acc = snapshot.docs.map((docSnap) => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          }));
+          // Filtrar cuentas con token válido (activas)
+          const activeAccounts = acc.filter(
+            (account) => account.token?.access_token
+          );
+          setAccounts(activeAccounts);
+        }
       }
-    });
+    );
     return () => unsub();
   }, []);
 
@@ -38,17 +41,15 @@ const Publicaciones = () => {
     let allPublicaciones = [];
     const limit = 50; // Máximo permitido por la API
     for (const account of accounts) {
+      // Usamos el id del perfil si existe o el id de la cuenta
       const sellerId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
       if (!sellerId || !accessToken) continue;
 
-      // Define el SITE_ID. Ejemplo: "MLM" para México.
-      const siteId = "MLM";
-
       try {
-        // Primera llamada para obtener el total de publicaciones
+        // Primera llamada para obtener el total de publicaciones usando el endpoint de usuario
         const firstResponse = await fetch(
-          `https://api.mercadolibre.com/sites/${siteId}/search?seller_id=${sellerId}&limit=${limit}&offset=0`,
+          `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=0`,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -69,7 +70,7 @@ const Publicaciones = () => {
         // Bucle para paginar la petición a la API
         while (offset < total) {
           const pagedResponse = await fetch(
-            `https://api.mercadolibre.com/sites/${siteId}/search?seller_id=${sellerId}&limit=${limit}&offset=${offset}`,
+            `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=${offset}`,
             {
               headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -125,7 +126,7 @@ const Publicaciones = () => {
     return matchesTitulo && matchesAccount && matchesId;
   });
 
-  // Cálculos para la paginación en la UI
+  // Paginación en la UI
   const totalPages = Math.ceil(filteredPublicaciones.length / pageSize);
   const paginatedPublicaciones = filteredPublicaciones.slice(
     (currentPage - 1) * pageSize,
