@@ -3,126 +3,188 @@ import { db } from "../firebaseConfig";
 import { collection, onSnapshot } from "firebase/firestore";
 
 const Publicaciones = () => {
+  const [publicaciones, setPublicaciones] = useState([]);
   const [accounts, setAccounts] = useState([]);
-  const [selectedAccountId, setSelectedAccountId] = useState(null);
-  const [stateFilter, setStateFilter] = useState("all"); // "all", "active", "paused", "closed"
-  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState({
+    titulo: "",
+    account: "",
+    publicationId: "",
+  });
+  // Usamos una pestaña para seleccionar el estado a consultar:
+  // Puedes elegir "active", "paused", "closed" o "all"
+  const [selectedStatus, setSelectedStatus] = useState("all");
 
   // Escucha las cuentas conectadas en Firestore
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       if (snapshot && snapshot.docs) {
-        const acc = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
+        const acc = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
         }));
-        // Solo consideramos cuentas con token válido
+        // Filtra cuentas que tengan un token válido
         const validAccounts = acc.filter(
           (account) => account.token?.access_token
         );
         setAccounts(validAccounts);
-        // Seleccionar la primera cuenta si no hay una seleccionada
-        if (validAccounts.length > 0 && !selectedAccountId) {
-          setSelectedAccountId(validAccounts[0].id);
-        }
       }
     });
     return () => unsub();
-  }, [selectedAccountId]);
+  }, []);
 
   /**
-   * Función para traer TODOS los ítems para una cuenta y un estado usando search_type=scan.
-   * Si stateFilter es "all", no se aplica filtro de estado.
+   * Función que utiliza search_type=scan para obtener todos los ítems de una cuenta
+   * para un estado dado. Se basa en scroll_id para paginar hasta agotar los resultados.
    */
-  const fetchItemsForAccount = async (account, stateFilter) => {
-    setLoading(true);
-    const sellerId = account.profile?.id;
-    const accessToken = account.token?.access_token;
-    if (!sellerId || !accessToken) {
-      setLoading(false);
-      return [];
-    }
+  const fetchPublicacionesForAccountAndStatusScan = async (
+    sellerId,
+    accessToken,
+    status
+  ) => {
     let results = [];
-    // Construir la URL base con search_type=scan y un límite de 100
-    let url = `https://api.mercadolibre.com/users/${sellerId}/items/search?search_type=scan&limit=100`;
-    if (stateFilter !== "all") {
-      url += `&status=${stateFilter}`;
-    }
-    // Bucle para recorrer todos los lotes usando scroll_id
+    // URL base con search_type=scan y un límite de 100 (máximo permitido)
+    const baseUrl = `https://api.mercadolibre.com/users/${sellerId}/items/search?search_type=scan&status=${status}&limit=100`;
+    let url = baseUrl;
     while (true) {
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!response.ok) {
-        console.error(
-          `Error para seller ${sellerId} con filtro ${stateFilter}: ${response.status}`
-        );
+        console.error(`Error para seller ${sellerId} con status ${status}: ${response.status}`);
         break;
       }
       const data = await response.json();
       results = results.concat(data.results || []);
-      if (!data.scroll_id) break; // ya no hay más registros
-      // Actualiza la URL para la siguiente llamada usando scroll_id
-      url = `https://api.mercadolibre.com/users/${sellerId}/items/search?search_type=scan&limit=100${
-        stateFilter !== "all" ? `&status=${stateFilter}` : ""
-      }&scroll_id=${encodeURIComponent(data.scroll_id)}`;
+      // Si no se devuelve scroll_id, ya no hay más registros
+      if (!data.scroll_id) break;
+      // Actualizamos la URL con el scroll_id para la siguiente llamada
+      url = `${baseUrl}&scroll_id=${encodeURIComponent(data.scroll_id)}`;
     }
-    setLoading(false);
     return results;
   };
 
-  // Cada vez que cambie la cuenta seleccionada o el filtro de estado, se traen los ítems
-  useEffect(() => {
-    const account = accounts.find((acc) => acc.id === selectedAccountId);
-    if (account) {
-      fetchItemsForAccount(account, stateFilter).then((fetchedItems) => {
-        const processedItems = fetchedItems.map((item) => ({
-          ...item,
-          accountName: account.profile?.nickname || "Sin Nombre",
-          estado: item.status || stateFilter,
-        }));
-        setItems(processedItems);
-      });
-    } else {
-      setItems([]);
+  /**
+   * Función principal para obtener publicaciones.
+   * Dependiendo de la pestaña seleccionada se obtienen registros de uno o varios estados.
+   */
+  const fetchPublicaciones = async () => {
+    setLoading(true);
+    let allPublicaciones = [];
+    // Si se selecciona "all", se buscan en varios estados (activos, pausados y cerrados)
+    const statusesToFetch =
+      selectedStatus === "all"
+        ? ["active", "paused", "closed"]
+        : [selectedStatus];
+
+    for (const account of accounts) {
+      // Se usa el id real del vendedor (account.profile?.id)
+      const sellerId = account.profile?.id;
+      const accessToken = account.token?.access_token;
+      if (!sellerId || !accessToken) {
+        console.error(`La cuenta ${account.id} no tiene un sellerId válido o token.`);
+        continue;
+      }
+
+      for (const status of statusesToFetch) {
+        try {
+          const items = await fetchPublicacionesForAccountAndStatusScan(sellerId, accessToken, status);
+          const pubs = items.map((item) => ({
+            ...item,
+            // Si el ítem no trae el status, asumimos el que consultamos
+            estado: item.status || status,
+            accountName: account.profile?.nickname || "Sin Nombre",
+          }));
+          allPublicaciones = allPublicaciones.concat(pubs);
+        } catch (error) {
+          console.error(
+            `Error al obtener publicaciones de la cuenta ${account.id} para status ${status}:`,
+            error
+          );
+        }
+      }
     }
-  }, [selectedAccountId, stateFilter, accounts]);
+    setPublicaciones(allPublicaciones);
+    setLoading(false);
+  };
+
+  // Ejecuta la búsqueda cuando cambian las cuentas o la pestaña seleccionada
+  useEffect(() => {
+    if (accounts.length > 0) {
+      fetchPublicaciones();
+    }
+  }, [selectedStatus, accounts]);
+
+  // Manejo de filtros (por título, cuenta o ID)
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const filteredPublicaciones = publicaciones.filter((pub) => {
+    const matchesTitulo = pub.title?.toLowerCase().includes(filters.titulo.toLowerCase());
+    const matchesAccount = pub.accountName?.toLowerCase().includes(filters.account.toLowerCase());
+    const matchesId = pub.id?.toString().includes(filters.publicationId);
+    return matchesTitulo && matchesAccount && matchesId;
+  });
 
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>Gestión de Publicaciones</h1>
-      {/* Pestañas de cuentas */}
-      <div style={styles.accountTabs}>
-        {accounts.map((account) => (
-          <button
-            key={account.id}
-            onClick={() => setSelectedAccountId(account.id)}
-            style={
-              account.id === selectedAccountId
-                ? styles.activeAccountTab
-                : styles.accountTab
-            }
-          >
-            {account.profile?.nickname || account.id}
-          </button>
-        ))}
+      {/* Pestañas para seleccionar el estado */}
+      <div style={styles.tabs}>
+        <button
+          style={selectedStatus === "active" ? styles.activeTab : styles.tab}
+          onClick={() => setSelectedStatus("active")}
+        >
+          Activas
+        </button>
+        <button
+          style={selectedStatus === "paused" ? styles.activeTab : styles.tab}
+          onClick={() => setSelectedStatus("paused")}
+        >
+          Pausadas
+        </button>
+        <button
+          style={selectedStatus === "closed" ? styles.activeTab : styles.tab}
+          onClick={() => setSelectedStatus("closed")}
+        >
+          Cerradas
+        </button>
+        <button
+          style={selectedStatus === "all" ? styles.activeTab : styles.tab}
+          onClick={() => setSelectedStatus("all")}
+        >
+          Todas
+        </button>
       </div>
-      {/* Pestañas de estado */}
-      <div style={styles.stateTabs}>
-        {["all", "active", "paused", "closed"].map((state) => (
-          <button
-            key={state}
-            onClick={() => setStateFilter(state)}
-            style={
-              state === stateFilter ? styles.activeStateTab : styles.stateTab
-            }
-          >
-            {state.charAt(0).toUpperCase() + state.slice(1)}
-          </button>
-        ))}
+      {/* Filtros de búsqueda */}
+      <div style={styles.filterContainer}>
+        <input
+          type="text"
+          name="titulo"
+          placeholder="Buscar por título"
+          value={filters.titulo}
+          onChange={handleFilterChange}
+          style={styles.filterInput}
+        />
+        <input
+          type="text"
+          name="account"
+          placeholder="Buscar por nombre de cuenta"
+          value={filters.account}
+          onChange={handleFilterChange}
+          style={styles.filterInput}
+        />
+        <input
+          type="text"
+          name="publicationId"
+          placeholder="Buscar por ID de publicación"
+          value={filters.publicationId}
+          onChange={handleFilterChange}
+          style={styles.filterInput}
+        />
       </div>
-      {/* Tabla de publicaciones */}
       {loading ? (
         <p>Cargando publicaciones...</p>
       ) : (
@@ -138,15 +200,11 @@ const Publicaciones = () => {
             </tr>
           </thead>
           <tbody>
-            {items.map((pub) => (
+            {filteredPublicaciones.map((pub) => (
               <tr key={pub.id}>
                 <td style={styles.td}>
                   {pub.pictures && pub.pictures.length > 0 ? (
-                    <img
-                      src={pub.pictures[0].url}
-                      alt={pub.title}
-                      style={{ width: "50px" }}
-                    />
+                    <img src={pub.pictures[0].url} alt={pub.title} style={{ width: "50px" }} />
                   ) : (
                     "Sin imagen"
                   )}
@@ -177,51 +235,43 @@ const styles = {
   },
   title: {
     textAlign: "center",
-    marginBottom: "20px",
     color: "#333",
+    marginBottom: "20px",
   },
-  accountTabs: {
-    display: "flex",
-    justifyContent: "center",
-    marginBottom: "10px",
-    flexWrap: "wrap",
-    gap: "10px",
-  },
-  accountTab: {
-    padding: "10px 15px",
-    backgroundColor: "#eee",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-  },
-  activeAccountTab: {
-    padding: "10px 15px",
-    backgroundColor: "#3498db",
-    color: "#fff",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-  },
-  stateTabs: {
+  tabs: {
     display: "flex",
     justifyContent: "center",
     marginBottom: "20px",
-    gap: "10px",
   },
-  stateTab: {
-    padding: "10px 15px",
-    backgroundColor: "#eee",
+  tab: {
+    padding: "10px 20px",
+    margin: "0 5px",
+    backgroundColor: "#f0f0f0",
     border: "none",
     borderRadius: "4px",
     cursor: "pointer",
   },
-  activeStateTab: {
-    padding: "10px 15px",
+  activeTab: {
+    padding: "10px 20px",
+    margin: "0 5px",
     backgroundColor: "#3498db",
     color: "#fff",
     border: "none",
     borderRadius: "4px",
     cursor: "pointer",
+  },
+  filterContainer: {
+    display: "flex",
+    gap: "10px",
+    marginBottom: "20px",
+    justifyContent: "center",
+    flexWrap: "wrap",
+  },
+  filterInput: {
+    padding: "8px",
+    fontSize: "1em",
+    borderRadius: "4px",
+    border: "1px solid #ccc",
   },
   table: {
     width: "100%",
