@@ -35,18 +35,16 @@ const Publicaciones = () => {
     setLoading(true);
     let allPublicaciones = [];
     for (const account of accounts) {
-      // Se obtiene el sellerId a partir del perfil, ya que es el id real del vendedor
-      const sellerId = account.profile?.id;
+      const sellerId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
-      if (!sellerId || !accessToken) {
-        console.error(`La cuenta ${account.id} no tiene un sellerId válido o token.`);
-        continue;
-      }
+      if (!sellerId || !accessToken) continue;
+
+      // Define el SITE_ID. Ejemplo: "MLM" para México.
+      const siteId = "MLM";
 
       try {
-        // Se utiliza el endpoint recomendado para obtener las publicaciones de un vendedor
         const response = await fetch(
-          `https://api.mercadolibre.com/users/${sellerId}/items/search`,
+          `https://api.mercadolibre.com/sites/${siteId}/search?seller_id=${sellerId}`,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -61,7 +59,6 @@ const Publicaciones = () => {
         }
         const data = await response.json();
         const results = data.results || [];
-        // Se agregan datos adicionales para mostrar en la tabla
         const activePublicaciones = results.map((item) => ({
           ...item,
           estado: "active",
@@ -69,7 +66,11 @@ const Publicaciones = () => {
         }));
         allPublicaciones = allPublicaciones.concat(activePublicaciones);
       } catch (error) {
-        console.error("Error al obtener publicaciones para la cuenta", account.id, error);
+        console.error(
+          "Error al obtener publicaciones para la cuenta",
+          account.id,
+          error
+        );
       }
     }
     setPublicaciones(allPublicaciones);
