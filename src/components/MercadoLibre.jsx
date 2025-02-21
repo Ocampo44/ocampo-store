@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { collection, onSnapshot, addDoc, doc, updateDoc } from "firebase/firestore";
+import React, { useState, useEffect } from "react";
+import { collection, onSnapshot, addDoc, updateDoc, doc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
 // Función para generar code_verifier y code_challenge (PKCE)
@@ -24,13 +24,15 @@ const generateCodeVerifierAndChallenge = async () => {
 const MercadoLibre = () => {
   const [usuarios, setUsuarios] = useState([]);
   const [estado, setEstado] = useState("Inactivo");
+  const [currentToken, setCurrentToken] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
-  // Inicia la autenticación solicitando los permisos que incluyen offline_access
+  // Inicia la autenticación solicitando permisos (incluye offline_access)
   const iniciarAutenticacion = async () => {
     const { codeVerifier, codeChallenge } = await generateCodeVerifierAndChallenge();
     localStorage.setItem("code_verifier", codeVerifier);
 
-    // Se añade el parámetro scope con offline_access para que se genere el refresh token
+    // Se añade el parámetro scope con offline_access para obtener el refresh token
     const authUrl = `https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=https://www.ocampostore.store/mercadolibre&code_challenge=${codeChallenge}&code_challenge_method=S256&scope=offline_access%20read%20write`;
     window.location.href = authUrl;
   };
@@ -74,7 +76,50 @@ const MercadoLibre = () => {
     }
   };
 
-  // Cuando llega el código en la URL, se procesa y se guarda en Firebase junto con el token
+  // Función para actualizar los datos del usuario (simulando la petición cURL mediante fetch)
+  const actualizarDatosUsuario = async (userId, accessToken) => {
+    const url = `https://api.mercadolibre.com/users/${userId}`;
+    const body = {
+      address: "Triunvirato 5555",
+      state: "AR-C",
+      city: "Capital Federal",
+      zip_dode: "1431",
+      phone: {
+        area_code: "011",
+        number: "4444-4444",
+        extension: "001",
+      },
+      first_name: "Pedro",
+      last_name: "Picapiedras",
+      company: {
+        corporate_name: "Acme",
+        brand_name: "Acme Company",
+      },
+      mercadoenvios: "accepted",
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        throw new Error("Error al actualizar los datos");
+      }
+      const data = await response.json();
+      console.log("Datos actualizados:", data);
+      setEstado("Datos actualizados correctamente.");
+    } catch (error) {
+      console.error("Error en la actualización:", error);
+      setEstado("Error al actualizar los datos.");
+    }
+  };
+
+  // Procesa el código en la URL, obtiene el token y lo guarda en Firestore
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
     const code = queryParams.get("code");
@@ -94,8 +139,12 @@ const MercadoLibre = () => {
             return;
           }
           console.log("Token de acceso:", tokenData);
+          // Guarda el token en el estado
+          setCurrentToken(tokenData.access_token);
+          // Se asume que la respuesta incluye el user_id
+          setCurrentUserId(tokenData.user_id);
 
-          // Actualiza el documento con el token (incluye refresh_token si lo hay)
+          // Actualiza el documento en Firestore con el token (incluye refresh_token si lo hay)
           await updateDoc(doc(db, "mercadolibreUsers", docRef.id), { token: tokenData });
           setEstado("Autorización completada y token guardado.");
         } catch (err) {
@@ -144,6 +193,16 @@ const MercadoLibre = () => {
           ))}
         </ul>
       )}
+
+      {/* Botón para actualizar datos del usuario (sólo si se cuenta con token y user_id) */}
+      {currentToken && currentUserId && (
+        <button
+          style={{ ...styles.button, marginTop: "20px" }}
+          onClick={() => actualizarDatosUsuario(currentUserId, currentToken)}
+        >
+          Actualizar datos del usuario
+        </button>
+      )}
     </div>
   );
 };
@@ -156,6 +215,8 @@ const styles = {
     backgroundColor: "#f5f7fa",
     color: "#333",
     textAlign: "center",
+    margin: "20px auto",
+    maxWidth: "600px",
   },
   title: {
     margin: "0 0 20px",
