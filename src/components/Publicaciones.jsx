@@ -11,6 +11,8 @@ const Publicaciones = () => {
     account: "",
     publicationId: "",
   });
+  // Nuevo estado para seleccionar el filtro de estado de la publicación
+  const [itemStatus, setItemStatus] = useState("active");
 
   // Escuchar las cuentas conectadas en Firestore
   useEffect(() => {
@@ -20,7 +22,7 @@ const Publicaciones = () => {
           id: docSnap.id,
           ...docSnap.data(),
         }));
-        // Filtrar cuentas con token válido
+        // Filtrar cuentas con token válido (activas)
         const activeAccounts = acc.filter(
           (account) => account.token?.access_token
         );
@@ -30,24 +32,22 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para obtener solo publicaciones inactivas (status "paused")
+  // Función para obtener publicaciones de cada cuenta
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
     for (const account of accounts) {
-      // Usamos el id real del vendedor obtenido del perfil
+      // Se obtiene el sellerId a partir del perfil (ID real del vendedor)
       const sellerId = account.profile?.id;
       const accessToken = account.token?.access_token;
       if (!sellerId || !accessToken) {
-        console.error(
-          `La cuenta ${account.id} no tiene un sellerId válido o token.`
-        );
+        console.error(`La cuenta ${account.id} no tiene un sellerId válido o token.`);
         continue;
       }
 
       try {
-        // Se utiliza el endpoint con el parámetro status=paused para traer solo ítems inactivos
-        const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=paused`;
+        // Construimos la URL incluyendo el parámetro de estado
+        const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=${itemStatus}`;
         const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -55,25 +55,21 @@ const Publicaciones = () => {
         });
         if (!response.ok) {
           console.error(
-            `Error al obtener publicaciones inactivas de la cuenta ${account.id}: ${response.status}`
+            `Error al obtener publicaciones de la cuenta ${account.id}: ${response.status}`
           );
           continue;
         }
         const data = await response.json();
         const results = data.results || [];
-        const publicacionesInactivas = results.map((item) => ({
+        const publicacionesConDatos = results.map((item) => ({
           ...item,
-          // Se asigna el estado obtenido o se asume "paused"
-          estado: item.status || "paused",
+          // Si el ítem trae su propio status lo usamos; de lo contrario, usamos el filtro aplicado
+          estado: item.status || itemStatus,
           accountName: account.profile?.nickname || "Sin Nombre",
         }));
-        allPublicaciones = allPublicaciones.concat(publicacionesInactivas);
+        allPublicaciones = allPublicaciones.concat(publicacionesConDatos);
       } catch (error) {
-        console.error(
-          "Error al obtener publicaciones para la cuenta",
-          account.id,
-          error
-        );
+        console.error("Error al obtener publicaciones para la cuenta", account.id, error);
       }
     }
     setPublicaciones(allPublicaciones);
@@ -84,6 +80,11 @@ const Publicaciones = () => {
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // Manejo del cambio en el estado de publicación (active, paused, closed, all)
+  const handleStatusChange = (e) => {
+    setItemStatus(e.target.value);
   };
 
   const filteredPublicaciones = publicaciones.filter((pub) => {
@@ -99,9 +100,20 @@ const Publicaciones = () => {
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Publicaciones Inactivas</h1>
+      <h1 style={styles.title}>Publicaciones de Usuarios</h1>
+      <div style={{ marginBottom: "20px", textAlign: "center" }}>
+        <label>
+          Estado de publicación:{" "}
+          <select value={itemStatus} onChange={handleStatusChange}>
+            <option value="active">Activas</option>
+            <option value="paused">Pausadas</option>
+            <option value="closed">Cerradas</option>
+            <option value="all">Todas</option>
+          </select>
+        </label>
+      </div>
       <button onClick={fetchPublicaciones} style={styles.fetchButton}>
-        Traer Publicaciones Inactivas
+        Traer Publicaciones
       </button>
       <div style={styles.filterContainer}>
         <input
