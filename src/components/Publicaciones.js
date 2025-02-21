@@ -12,26 +12,23 @@ const Publicaciones = () => {
     publicationId: "",
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10; // Cantidad de items a mostrar por página
+  const pageSize = 10; // Items por página en la UI
 
   // Escuchar las cuentas conectadas en Firestore
   useEffect(() => {
-    const unsub = onSnapshot(
-      collection(db, "mercadolibreUsers"),
-      (snapshot) => {
-        if (snapshot && snapshot.docs) {
-          const acc = snapshot.docs.map((docSnap) => ({
-            id: docSnap.id,
-            ...docSnap.data(),
-          }));
-          // Filtrar cuentas con token válido (activas)
-          const activeAccounts = acc.filter(
-            (account) => account.token?.access_token
-          );
-          setAccounts(activeAccounts);
-        }
+    const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
+      if (snapshot && snapshot.docs) {
+        const acc = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        }));
+        // Filtrar cuentas con token válido (activas)
+        const activeAccounts = acc.filter(
+          (account) => account.token?.access_token
+        );
+        setAccounts(activeAccounts);
       }
-    );
+    });
     return () => unsub();
   }, []);
 
@@ -39,7 +36,7 @@ const Publicaciones = () => {
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
-    const limit = 50; // Valor máximo permitido por la API es 50
+    const limit = 50; // Máximo permitido por la API
     for (const account of accounts) {
       const sellerId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
@@ -66,6 +63,7 @@ const Publicaciones = () => {
         }
         const firstData = await firstResponse.json();
         const total = firstData.paging?.total || 0;
+        console.log(`Cuenta ${account.id} - Total publicaciones: ${total}`);
         let offset = 0;
 
         // Bucle para paginar la petición a la API
@@ -104,7 +102,7 @@ const Publicaciones = () => {
       }
     }
     setPublicaciones(allPublicaciones);
-    setCurrentPage(1); // Reinicia la paginación al actualizar
+    setCurrentPage(1); // Reinicia la paginación
     setLoading(false);
   };
 
@@ -112,7 +110,7 @@ const Publicaciones = () => {
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
-    setCurrentPage(1); // Reinicia la paginación cuando se filtra
+    setCurrentPage(1); // Reinicia la paginación al filtrar
   };
 
   // Filtrar las publicaciones según los filtros aplicados
@@ -127,7 +125,7 @@ const Publicaciones = () => {
     return matchesTitulo && matchesAccount && matchesId;
   });
 
-  // Calcular los datos para la paginación en la UI
+  // Cálculos para la paginación en la UI
   const totalPages = Math.ceil(filteredPublicaciones.length / pageSize);
   const paginatedPublicaciones = filteredPublicaciones.slice(
     (currentPage - 1) * pageSize,
