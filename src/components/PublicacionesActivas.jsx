@@ -19,26 +19,32 @@ const PublicacionesActivas = () => {
         id: docSnap.id,
         ...docSnap.data(),
       }));
-      // Filtrar las cuentas que tengan un token válido (consideramos "activas")
+      // Filtrar cuentas con token válido (activas)
       const activeAccounts = acc.filter((account) => account.token?.access_token);
       setAccounts(activeAccounts);
     });
     return () => unsub();
   }, []);
 
-  // Obtener solo las publicaciones activas de cada cuenta activa
+  // Obtener las publicaciones activas de cada cuenta usando el endpoint /sites/...
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let allPublicaciones = [];
       for (const account of accounts) {
-        const userId = account.profile?.id || account.id;
+        const sellerId = account.profile?.id || account.id;
         const accessToken = account.token?.access_token;
-        if (!userId || !accessToken) continue;
+        if (!sellerId || !accessToken) continue;
+
+        // Define el SITE_ID. Ejemplo: "MLM" para México.
+        const siteId = "MLM"; // Cambia este valor según tu mercado
 
         try {
-          // Se consulta solo las publicaciones activas
           const response = await fetch(
-            `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=active`
+            `https://api.mercadolibre.com/sites/${siteId}/search?seller_id=${sellerId}`, {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+              },
+            }
           );
           if (!response.ok) {
             console.error(
@@ -47,7 +53,6 @@ const PublicacionesActivas = () => {
             continue;
           }
           const data = await response.json();
-
           const activePublicaciones = (data.results || []).map((item) => ({
             ...item,
             estado: "active",
@@ -64,6 +69,8 @@ const PublicacionesActivas = () => {
 
     if (accounts.length > 0) {
       fetchPublicaciones();
+    } else {
+      setLoading(false);
     }
   }, [accounts]);
 
