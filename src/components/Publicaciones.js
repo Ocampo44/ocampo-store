@@ -16,19 +16,22 @@ const Publicaciones = () => {
 
   // Escuchar las cuentas conectadas en Firestore
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
-      if (snapshot && snapshot.docs) {
-        const acc = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        }));
-        // Filtrar cuentas con token válido (activas)
-        const activeAccounts = acc.filter(
-          (account) => account.token?.access_token
-        );
-        setAccounts(activeAccounts);
+    const unsub = onSnapshot(
+      collection(db, "mercadolibreUsers"),
+      (snapshot) => {
+        if (snapshot && snapshot.docs) {
+          const acc = snapshot.docs.map((docSnap) => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          }));
+          // Filtrar cuentas con token válido (activas)
+          const activeAccounts = acc.filter(
+            (account) => account.token?.access_token
+          );
+          setAccounts(activeAccounts);
+        }
       }
-    });
+    );
     return () => unsub();
   }, []);
 
@@ -36,7 +39,7 @@ const Publicaciones = () => {
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
-    const limit = 100; // límite máximo permitido por la API
+    const limit = 50; // Valor máximo permitido por la API es 50
     for (const account of accounts) {
       const sellerId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
@@ -124,7 +127,7 @@ const Publicaciones = () => {
     return matchesTitulo && matchesAccount && matchesId;
   });
 
-  // Calcular los datos para la paginación
+  // Calcular los datos para la paginación en la UI
   const totalPages = Math.ceil(filteredPublicaciones.length / pageSize);
   const paginatedPublicaciones = filteredPublicaciones.slice(
     (currentPage - 1) * pageSize,
