@@ -30,7 +30,7 @@ import Compras from "./components/Compras"; // Lista de compras
 import AddCompraForm from "./components/AddCompraForm"; // Agregar compra
 import EditCompraForm from "./components/EditCompraForm"; // Editar compra
 
-// Importar componente de MercadoLibre (único archivo que se mantiene)
+// Importar componente de MercadoLibre
 import MercadoLibre from "./components/MercadoLibre";
 
 function App() {
@@ -476,7 +476,7 @@ function App() {
               path="/compras/editar/:id"
               element={<EditCompraForm warehouses={warehouses} productosDisponibles={products} />}
             />
-            {/* RUTA PARA MERCADOLIBRE (única) */}
+            {/* RUTA PARA MERCADOLIBRE */}
             <Route path="/mercadolibre" element={<MercadoLibre />} />
           </Routes>
         </div>
