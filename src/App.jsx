@@ -1,4 +1,3 @@
-// App.js
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
@@ -33,8 +32,6 @@ import EditCompraForm from "./components/EditCompraForm";
 
 // Componentes para MercadoLibre
 import MercadoLibreConnections from "./components/MercadoLibreConnections";
-// Si deseas usar el componente de publicaciones activas, también puedes importar ese.
-// import PublicacionesActivas from "./components/PublicacionesActivas";
 import Publicaciones from "./components/Publicaciones";
 
 function App() {
@@ -473,7 +470,7 @@ function App() {
 
             {/* Rutas para MercadoLibre */}
             <Route path="/mercadolibre" element={<MercadoLibreConnections />} />
-            {/* Rutas para publicaciones (usa Publicaciones o PublicacionesActivas según prefieras) */}
+            {/* Rutas para publicaciones */}
             <Route path="/publicaciones" element={<Publicaciones />} />
           </Routes>
         </div>

@@ -54,7 +54,8 @@ const Publicaciones = () => {
           continue;
         }
         const data = await response.json();
-        const activePublicaciones = (data.results || []).map((item) => ({
+        const results = data.results || [];
+        const activePublicaciones = results.map((item) => ({
           ...item,
           estado: "active",
           accountName: account.profile?.nickname || "Sin Nombre",

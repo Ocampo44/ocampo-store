@@ -37,6 +37,10 @@ const fetchUserProfile = async (accessToken) => {
     const response = await fetch(
       `https://api.mercadolibre.com/users/me?access_token=${accessToken}`
     );
+    if (!response.ok) {
+      console.error("Error en la respuesta al obtener el perfil:", response.status);
+      return null;
+    }
     const data = await response.json();
     return data;
   } catch (error) {
@@ -51,6 +55,9 @@ const checkTokenValidity = async (accessToken) => {
     const response = await fetch(
       `https://api.mercadolibre.com/users/me?access_token=${accessToken}`
     );
+    if (!response.ok) {
+      return false;
+    }
     const data = await response.json();
     return data && data.id ? true : false;
   } catch (error) {
@@ -66,12 +73,17 @@ const MercadoLibreConnections = () => {
 
   // Inicia la autenticación para conectar (o renovar) la cuenta.
   const iniciarAutenticacion = async () => {
-    const { codeVerifier, codeChallenge } = await generateCodeVerifierAndChallenge();
-    localStorage.setItem("code_verifier", codeVerifier);
-    const authUrl = `https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=${encodeURIComponent(
-      "https://www.ocampostore.store/mercadolibre"
-    )}&code_challenge=${codeChallenge}&code_challenge_method=S256&scope=offline_access%20read%20write`;
-    window.location.href = authUrl;
+    try {
+      const { codeVerifier, codeChallenge } = await generateCodeVerifierAndChallenge();
+      localStorage.setItem("code_verifier", codeVerifier);
+      const redirectUri = "https://www.ocampostore.store/mercadolibre";
+      const authUrl = `https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=${encodeURIComponent(
+        redirectUri
+      )}&code_challenge=${codeChallenge}&code_challenge_method=S256&scope=offline_access%20read%20write`;
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error("Error iniciando autenticación:", error);
+    }
   };
 
   // Función para renovar token de una cuenta en particular.
@@ -115,6 +127,10 @@ const MercadoLibreConnections = () => {
         },
         body: data,
       });
+      if (!response.ok) {
+        console.error("Error al intercambiar el código por token:", response.status);
+        return null;
+      }
       const tokenData = await response.json();
       return tokenData && tokenData.access_token ? tokenData : null;
     } catch (error) {
@@ -142,7 +158,6 @@ const MercadoLibreConnections = () => {
           return;
         }
         const profileId = profileData.id.toString();
-        // Si se está renovando, se usa el ID almacenado; de lo contrario, el ID del perfil.
         const renewAccountId = localStorage.getItem("renewAccountId");
         const accountDocId = renewAccountId ? renewAccountId : profileId;
         const userDocRef = doc(db, "mercadolibreUsers", accountDocId);
