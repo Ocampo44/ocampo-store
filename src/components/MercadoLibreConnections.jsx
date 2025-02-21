@@ -163,7 +163,11 @@ const MercadoLibreConnections = () => {
           { token: tokenData, profile: profileData, code },
           { merge: true }
         );
-        setStatus(renewAccountId ? "Token renovado exitosamente" : "Cuenta conectada exitosamente");
+        setStatus(
+          renewAccountId
+            ? "Token renovado exitosamente"
+            : "Cuenta conectada exitosamente"
+        );
         if (renewAccountId) localStorage.removeItem("renewAccountId");
       };
       processCode();
@@ -228,7 +232,9 @@ const MercadoLibreConnections = () => {
             <tr
               key={account.id}
               style={{
-                backgroundColor: tokenStatuses[account.id] ? "#d4edda" : "#f8d7da",
+                backgroundColor: tokenStatuses[account.id]
+                  ? "#d4edda"
+                  : "#f8d7da",
               }}
             >
               <td style={styles.td}>
