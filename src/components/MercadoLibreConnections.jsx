@@ -5,6 +5,7 @@ import {
   setDoc,
   doc,
   deleteDoc,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
@@ -163,11 +164,7 @@ const MercadoLibreConnections = () => {
           { token: tokenData, profile: profileData, code },
           { merge: true }
         );
-        setStatus(
-          renewAccountId
-            ? "Token renovado exitosamente"
-            : "Cuenta conectada exitosamente"
-        );
+        setStatus(renewAccountId ? "Token renovado exitosamente" : "Cuenta conectada exitosamente");
         if (renewAccountId) localStorage.removeItem("renewAccountId");
       };
       processCode();
@@ -179,19 +176,17 @@ const MercadoLibreConnections = () => {
   // Escucha cambios en Firestore para obtener las cuentas conectadas.
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
-      if (snapshot && snapshot.docs) {
-        const acc = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        }));
-        // Ordena las cuentas alfabéticamente por nickname.
-        acc.sort((a, b) => {
-          const nameA = a.profile?.nickname || "";
-          const nameB = b.profile?.nickname || "";
-          return nameA.localeCompare(nameB);
-        });
-        setAccounts(acc);
-      }
+      const acc = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      }));
+      // Ordena las cuentas alfabéticamente por nickname.
+      acc.sort((a, b) => {
+        const nameA = a.profile?.nickname || "";
+        const nameB = b.profile?.nickname || "";
+        return nameA.localeCompare(nameB);
+      });
+      setAccounts(acc);
     });
     return () => unsub();
   }, []);
@@ -232,9 +227,7 @@ const MercadoLibreConnections = () => {
             <tr
               key={account.id}
               style={{
-                backgroundColor: tokenStatuses[account.id]
-                  ? "#d4edda"
-                  : "#f8d7da",
+                backgroundColor: tokenStatuses[account.id] ? "#d4edda" : "#f8d7da",
               }}
             >
               <td style={styles.td}>
