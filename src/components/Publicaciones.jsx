@@ -78,13 +78,13 @@ const Publicaciones = () => {
 
   // Función para obtener las publicaciones utilizando el endpoint de User Products.
   // Se consulta /users/$USER_ID/items/search con include_filters=true y search_type=scan.
-  // Se añade el parámetro &status=all para intentar traer ítems de cualquier status.
+  // Se removió el parámetro status=all para evitar problemas.
   const fetchUserProducts = async () => {
     setLoading(true);
     let allProducts = [];
     const limit = 50; // límite máximo permitido por la API
-    // Parámetros adicionales para incluir filtros, escanear más de 1000 registros y traer todos los status
-    const additionalParams = "&include_filters=true&search_type=scan&status=all";
+    // Parámetros adicionales para incluir filtros y escanear más de 1000 registros
+    const additionalParams = "&include_filters=true&search_type=scan";
 
     for (const account of accounts) {
       // Se utiliza el ID de perfil o el ID de la cuenta
@@ -111,6 +111,7 @@ const Publicaciones = () => {
           continue;
         }
         const firstData = await firstResponse.json();
+        console.log("Datos de la primera respuesta:", firstData);
         const total = firstData.paging?.total || 0;
         console.log(`Usuario ${userId}: total ítems: ${total}`);
         while (offset < total) {
@@ -178,10 +179,10 @@ const Publicaciones = () => {
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>
-        Publicaciones (Todos los ítems de MercadoLibre sin importar su status)
+        Publicaciones (Intento de traer todos los ítems de MercadoLibre)
       </h1>
       <button onClick={fetchUserProducts} style={styles.fetchButton}>
-        Traer Publicaciones (Todos)
+        Traer Publicaciones
       </button>
       <div style={styles.filterContainer}>
         <input
