@@ -14,29 +14,34 @@ const Publicaciones = () => {
   const [products, setProducts] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({
-    title: "",
-    family: "",
-    productId: "",
-  });
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
 
+  // Escucha en tiempo real las cuentas en Firestore
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
-      if (snapshot && snapshot.docs) {
-        const acc = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        }));
-        const validAccounts = acc.filter((account) => account.token?.access_token);
-        setAccounts(validAccounts);
-        console.log("🔥 Cuentas cargadas desde Firestore:", validAccounts);
+    const unsub = onSnapshot(
+      collection(db, "mercadolibreUsers"),
+      (snapshot) => {
+        if (snapshot?.docs) {
+          const acc = snapshot.docs.map((docSnap) => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          }));
+          const validAccounts = acc.filter(
+            (account) => account.token?.access_token
+          );
+          setAccounts(validAccounts);
+          console.log("🔥 Cuentas cargadas desde Firestore:", validAccounts);
+        }
+      },
+      (error) => {
+        console.error("Error al cargar cuentas:", error);
       }
-    });
+    );
     return () => unsub();
   }, []);
 
+  // Guarda las publicaciones en Firestore
   const saveProductsToDB = async (productsArr) => {
     console.log("📝 Guardando publicaciones en DB:", productsArr);
     for (const prod of productsArr) {
@@ -60,9 +65,13 @@ const Publicaciones = () => {
     }
   };
 
+  // Carga las publicaciones guardadas desde Firestore
   const loadProductsFromDB = async () => {
     try {
-      const q = query(collection(db, "userProducts"), orderBy("updatedAt", "desc"));
+      const q = query(
+        collection(db, "userProducts"),
+        orderBy("updatedAt", "desc")
+      );
       const querySnapshot = await getDocs(q);
       const prods = querySnapshot.docs.map((docSnap) => docSnap.data());
       console.log("📂 Publicaciones cargadas desde Firestore:", prods);
@@ -73,6 +82,7 @@ const Publicaciones = () => {
     }
   };
 
+  // Consulta la API de MercadoLibre y procesa las publicaciones de cada cuenta
   const fetchUserProducts = async () => {
     setLoading(true);
     let allProducts = [];
@@ -105,7 +115,11 @@ const Publicaciones = () => {
             headers: { Authorization: `Bearer ${accessToken}` },
           });
           if (!response.ok) {
-            console.error(`❌ Error ${response.status} en la petición:`, await response.json());
+            const errorData = await response.json();
+            console.error(
+              `❌ Error ${response.status} en la petición:`,
+              errorData
+            );
             break;
           }
           
@@ -118,10 +132,12 @@ const Publicaciones = () => {
             break;
           }
 
+          // Se asume que cada item es un objeto con propiedades "id" y "title"
           const mapped = data.results.map((item) => ({
-            id: item,
-            title: `Publicación ${item}`,
+            id: item.id,
+            title: item.title,
             accountName: account.profile?.nickname || "Sin Nombre",
+            // Puedes agregar otros campos relevantes del item aquí
           }));
           
           allProducts = allProducts.concat(mapped);
@@ -144,7 +160,9 @@ const Publicaciones = () => {
   return (
     <div>
       <h1>Publicaciones</h1>
-      <button onClick={fetchUserProducts}>Traer Publicaciones</button>
+      <button onClick={fetchUserProducts} disabled={loading}>
+        Traer Publicaciones
+      </button>
       {loading ? (
         <p>Cargando publicaciones...</p>
       ) : (
@@ -153,7 +171,9 @@ const Publicaciones = () => {
           {products.length === 0 && <p>⚠️ No hay publicaciones para mostrar</p>}
           <ul>
             {products.map((prod) => (
-              <li key={prod.id}>{prod.title} - {prod.id}</li>
+              <li key={prod.id}>
+                {prod.title} - {prod.id} ({prod.accountName})
+              </li>
             ))}
           </ul>
         </>
