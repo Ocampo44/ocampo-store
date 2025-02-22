@@ -5,11 +5,11 @@ import { db } from "../firebaseConfig";
 
 const Publicaciones = () => {
   const [accounts, setAccounts] = useState([]);
-  // Objeto: { [sellerId]: { items: [...], currentPage: 1, totalPages: N } }
+  // Estructura: { [sellerId]: { items: [...], currentPage: 1, totalPages: N } }
   const [publicaciones, setPublicaciones] = useState({});
   const SITE_ID = "MLM"; // Cambia este valor según la región (MLM, MLA, MLB, etc.)
 
-  // Escucha en tiempo real las cuentas conectadas en Firestore
+  // Escucha las cuentas conectadas en Firestore
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const acc = snapshot.docs.map((docSnap) => ({
@@ -22,18 +22,18 @@ const Publicaciones = () => {
   }, []);
 
   // Función para traer todas las publicaciones de un vendedor
-  // utilizando paginación con limit=100 y offset
+  // utilizando 50 items por consulta
   const fetchPublicacionesForSeller = async (sellerId) => {
     const items = [];
     let offset = 0;
-    const limit = 100; // Límite máximo permitido por llamada
+    const limit = 50; // Máximo 50 items por consulta
     let total = 0;
     try {
       do {
         const url = `https://api.mercadolibre.com/sites/${SITE_ID}/search?seller_id=${sellerId}&limit=${limit}&offset=${offset}`;
         const response = await fetch(url);
         const data = await response.json();
-        console.log("Respuesta de publicaciones para vendedor", sellerId, data);
+        console.log("Respuesta para vendedor", sellerId, data);
         if (!response.ok) {
           console.error(
             `Error al obtener publicaciones para el vendedor ${sellerId}: ${response.status}`,
@@ -54,7 +54,7 @@ const Publicaciones = () => {
     return items;
   };
 
-  // Para cada cuenta conectada, se consultan y guardan todas las publicaciones
+  // Para cada cuenta, se consultan y se guardan todas las publicaciones
   useEffect(() => {
     const fetchAllPublicaciones = async () => {
       const pubs = {};
@@ -62,7 +62,7 @@ const Publicaciones = () => {
         const sellerId = account.profile?.id;
         if (sellerId) {
           const items = await fetchPublicacionesForSeller(sellerId);
-          // Calcula cuántas páginas (de 50 ítems por página) se deben mostrar
+          // Se calcula el total de páginas (50 items por página en la UI)
           const totalPages = Math.ceil(items.length / 50);
           pubs[sellerId] = {
             items,
@@ -79,7 +79,7 @@ const Publicaciones = () => {
     }
   }, [accounts]);
 
-  // Función para manejar el cambio de página para cada vendedor
+  // Función para cambiar de página en la UI para cada vendedor
   const handlePageChange = (sellerId, newPage) => {
     setPublicaciones((prev) => ({
       ...prev,
