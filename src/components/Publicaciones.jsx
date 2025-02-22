@@ -6,8 +6,7 @@ const Publicaciones = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Asegúrate de tener el token y el user ID. 
-  // Puedes obtenerlos de localStorage o de tu estado global, según corresponda.
+  // Suponiendo que el token y userId se guardan en localStorage
   const accessToken = localStorage.getItem("mercadoLibreAccessToken");
   const userId = localStorage.getItem("mercadoLibreUserId");
 
@@ -27,7 +26,6 @@ const Publicaciones = () => {
           throw new Error(`Error en la respuesta: ${response.status}`);
         }
         const data = await response.json();
-        // data.results debe contener los IDs de las publicaciones
         setPublicaciones(data.results || []);
       } catch (err) {
         console.error("Error al obtener publicaciones:", err);
