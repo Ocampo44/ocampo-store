@@ -3,12 +3,14 @@ import React, { useEffect, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
+// Se espera que en el archivo .env tengas configurado REACT_APP_API_PROXY_URL
+// Ejemplo: REACT_APP_API_PROXY_URL=https://tudominio.com/proxy
+const API_PROXY_URL = process.env.REACT_APP_API_PROXY_URL || "https://api.mercadolibre.com";
+
 const Publicaciones = () => {
   const [accounts, setAccounts] = useState([]);
   // Estructura: { [sellerId]: { items: [...], currentPage: 1, totalPages: N } }
   const [publicaciones, setPublicaciones] = useState({});
-  // Aunque en el endpoint se utiliza /users, el sellerId es el mismo que se obtiene del perfil de la cuenta
-  const SITE_ID = "MLM"; // Se mantiene por referencia si se requiere en otro contexto
 
   // Escucha las cuentas conectadas en Firestore
   useEffect(() => {
@@ -17,12 +19,14 @@ const Publicaciones = () => {
         id: docSnap.id,
         ...docSnap.data(),
       }));
+      // Muestra en consola para ver que se obtienen datos
+      console.log("Cuentas obtenidas:", acc);
       setAccounts(acc);
     });
     return () => unsub();
   }, []);
 
-  // Función para traer todas las publicaciones de un vendedor paginando las peticiones a la API
+  // Función para traer todas las publicaciones de un vendedor, paginando las peticiones
   const fetchPublicacionesForSeller = async (accessToken, sellerId) => {
     const items = [];
     let offset = 0;
@@ -30,19 +34,18 @@ const Publicaciones = () => {
     let total = 0;
     try {
       do {
-        const response = await fetch(
-          `https://api.mercadolibre.com/users/${sellerId}/items/search?include_filters=true&limit=${limit}&offset=${offset}`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-          }
-        );
+        console.log(`Consultando publicaciones para ${sellerId} - offset: ${offset}`);
+        // Se utiliza el proxy para evitar problemas de CORS
+        const url = `${API_PROXY_URL}/users/${sellerId}/items/search?include_filters=true&limit=${limit}&offset=${offset}`;
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
         if (response.ok) {
           const data = await response.json();
-          // La respuesta contiene un array de IDs en data.results.
-          // Si se necesitan los detalles completos de cada publicación, se deberá realizar una llamada adicional
-          // por cada ID, por ejemplo: https://api.mercadolibre.com/items/{itemId}?access_token=${accessToken}
+          console.log("Respuesta de la API:", data);
+          // La respuesta devuelve un arreglo de IDs en data.results
           items.push(...data.results);
           total = data.paging.total;
           offset += limit;
@@ -71,7 +74,7 @@ const Publicaciones = () => {
         const sellerId = account.profile?.id;
         if (accessToken && sellerId) {
           const items = await fetchPublicacionesForSeller(accessToken, sellerId);
-          // Calcula el total de páginas (mostrando 50 ítems por página)
+          // Calcula el total de páginas (50 ítems por página)
           const totalPages = Math.ceil(items.length / 50);
           pubs[sellerId] = {
             items,
@@ -80,6 +83,7 @@ const Publicaciones = () => {
           };
         }
       }
+      console.log("Publicaciones obtenidas:", pubs);
       setPublicaciones(pubs);
     };
 
@@ -88,7 +92,7 @@ const Publicaciones = () => {
     }
   }, [accounts]);
 
-  // Funciones de paginación para cada vendedor
+  // Función de paginación para cada vendedor
   const handlePageChange = (sellerId, newPage) => {
     setPublicaciones((prev) => ({
       ...prev,
@@ -105,7 +109,7 @@ const Publicaciones = () => {
       {Object.keys(publicaciones).length === 0 && <p>No se encontraron publicaciones.</p>}
       {Object.entries(publicaciones).map(([sellerId, pubData]) => {
         const { items, currentPage, totalPages } = pubData;
-        // Determina el slice para mostrar 50 ítems por página
+        // Calcula los ítems a mostrar según la página actual
         const startIndex = (currentPage - 1) * 50;
         const endIndex = startIndex + 50;
         const itemsToShow = items.slice(startIndex, endIndex);
@@ -127,7 +131,7 @@ const Publicaciones = () => {
                   }}
                 >
                   <p>ID de Publicación: {itemId}</p>
-                  {/* Si se desea obtener más detalles, se podría realizar una consulta adicional por cada itemId */}
+                  {/* Aquí puedes agregar una llamada adicional para obtener detalles del ítem si es necesario */}
                 </div>
               ))
             )}
