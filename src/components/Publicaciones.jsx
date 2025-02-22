@@ -113,6 +113,11 @@ const Publicaciones = () => {
           if (offset === 0) total = data.paging?.total || 0;
           console.log(`Usuario ${userId}: obtenidos ${data.results.length} ítems, total esperado ${total}`);
           
+          if (!Array.isArray(data.results) || data.results.length === 0) {
+            console.warn(`⚠️ No se obtuvieron publicaciones para el usuario ${userId}`);
+            break;
+          }
+
           const mapped = data.results.map((item) => ({
             id: item,
             title: `Publicación ${item}`,
