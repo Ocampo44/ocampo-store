@@ -19,7 +19,6 @@ const Publicaciones = () => {
         id: docSnap.id,
         ...docSnap.data(),
       }));
-      // Muestra en consola para ver que se obtienen datos
       console.log("Cuentas obtenidas:", acc);
       setAccounts(acc);
     });
