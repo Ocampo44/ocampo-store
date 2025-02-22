@@ -33,7 +33,8 @@ import EditCompraForm from "./components/EditCompraForm";
 
 // Componentes para MercadoLibre
 import MercadoLibreConnections from "./components/MercadoLibreConnections";
-import Publicaciones from "./components/Publicaciones"; // <--- Importa Publicaciones
+// La ruta de Publicaciones se ha eliminado, pero puedes agregarla si lo deseas:
+// import Publicaciones from "./components/Publicaciones";
 
 function App() {
   const [warehouses, setWarehouses] = useState([]);
@@ -389,7 +390,8 @@ function App() {
 
             {/* Rutas MercadoLibre */}
             <Route path="/mercadolibre" element={<MercadoLibreConnections />} />
-            <Route path="/publicaciones" element={<Publicaciones />} />
+            {/* Si deseas agregar Publicaciones, descomenta la siguiente línea:
+            <Route path="/publicaciones" element={<Publicaciones />} /> */}
           </Routes>
         </div>
       </div>
