@@ -1,4 +1,3 @@
-// src/components/MercadoLibreConnections.js
 import React, { useEffect, useState } from "react";
 import {
   collection,
@@ -9,7 +8,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
-// Genera code_verifier y code_challenge (PKCE)
+// Función para generar code_verifier y code_challenge (PKCE)
 const generateCodeVerifierAndChallenge = async () => {
   const array = new Uint8Array(32);
   window.crypto.getRandomValues(array);
@@ -31,14 +30,14 @@ const generateCodeVerifierAndChallenge = async () => {
   return { codeVerifier, codeChallenge: base64Hash };
 };
 
-// Obtiene el perfil del usuario desde MercadoLibre
+// Función para obtener el perfil del usuario desde MercadoLibre
 const fetchUserProfile = async (accessToken) => {
   try {
     const response = await fetch(
       `https://api.mercadolibre.com/users/me?access_token=${accessToken}`
     );
     if (!response.ok) {
-      console.error("Error al obtener el perfil:", response.status);
+      console.error("Error en la respuesta al obtener el perfil:", response.status);
       return null;
     }
     const data = await response.json();
@@ -49,7 +48,7 @@ const fetchUserProfile = async (accessToken) => {
   }
 };
 
-// Valida el token
+// Función para validar el token: retorna true si es válido, false en caso contrario.
 const checkTokenValidity = async (accessToken) => {
   try {
     const response = await fetch(
@@ -69,14 +68,13 @@ const MercadoLibreConnections = () => {
   const [status, setStatus] = useState("");
   const [tokenStatuses, setTokenStatuses] = useState({});
 
-  // Inicia la autenticación para conectar o renovar la cuenta
+  // Inicia la autenticación para conectar (o renovar) la cuenta.
   const iniciarAutenticacion = async () => {
     try {
       const { codeVerifier, codeChallenge } = await generateCodeVerifierAndChallenge();
       localStorage.setItem("code_verifier", codeVerifier);
-      const redirectUri = "https://www.tu-dominio.com/mercadolibre"; 
-      // Reemplaza con tu dominio y ruta correctos
-      const authUrl = `https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=TU_CLIENT_ID&redirect_uri=${encodeURIComponent(
+      const redirectUri = "https://www.ocampostore.store/mercadolibre";
+      const authUrl = `https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=${encodeURIComponent(
         redirectUri
       )}&code_challenge=${codeChallenge}&code_challenge_method=S256&scope=offline_access%20read%20write`;
       window.location.href = authUrl;
@@ -85,13 +83,13 @@ const MercadoLibreConnections = () => {
     }
   };
 
-  // Renueva token de una cuenta en particular
+  // Función para renovar token de una cuenta en particular.
   const renovarToken = (accountId) => {
     localStorage.setItem("renewAccountId", accountId);
     iniciarAutenticacion();
   };
 
-  // Elimina un usuario de Firestore
+  // Función para eliminar un usuario de Firestore.
   const eliminarUsuario = async (accountId) => {
     try {
       await deleteDoc(doc(db, "mercadolibreUsers", accountId));
@@ -102,7 +100,7 @@ const MercadoLibreConnections = () => {
     }
   };
 
-  // Intercambia el código de autorización por el token
+  // Función para intercambiar el código de autorización por el token.
   const exchangeCodeForToken = async (code) => {
     const codeVerifier = localStorage.getItem("code_verifier");
     if (!codeVerifier) {
@@ -111,10 +109,10 @@ const MercadoLibreConnections = () => {
     }
     const data = new URLSearchParams();
     data.append("grant_type", "authorization_code");
-    data.append("client_id", "TU_CLIENT_ID");
-    data.append("client_secret", "TU_CLIENT_SECRET");
+    data.append("client_id", "8505590495521677");
+    data.append("client_secret", "Ps3qGnQHLgllwWjcjV0HuDxgBAwYFjLL");
     data.append("code", code);
-    data.append("redirect_uri", "https://www.tu-dominio.com/mercadolibre");
+    data.append("redirect_uri", "https://www.ocampostore.store/mercadolibre");
     data.append("code_verifier", codeVerifier);
 
     try {
@@ -138,7 +136,7 @@ const MercadoLibreConnections = () => {
     }
   };
 
-  // Procesa el código en la URL: intercambia por token y guarda/actualiza el usuario
+  // Procesa el código en la URL: intercambia por token y guarda/actualiza el usuario.
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
     const code = queryParams.get("code");
@@ -159,19 +157,12 @@ const MercadoLibreConnections = () => {
         const profileId = profileData.id.toString();
         const renewAccountId = localStorage.getItem("renewAccountId");
         const accountDocId = renewAccountId ? renewAccountId : profileId;
-
-        // Guarda en Firestore
         const userDocRef = doc(db, "mercadolibreUsers", accountDocId);
         await setDoc(
           userDocRef,
           { token: tokenData, profile: profileData, code },
           { merge: true }
         );
-
-        // Guarda también en localStorage para que otros componentes lo usen (Publicaciones, etc.)
-        localStorage.setItem("mercadoLibreAccessToken", tokenData.access_token);
-        localStorage.setItem("mercadoLibreUserId", profileId);
-
         setStatus(
           renewAccountId
             ? "Token renovado exitosamente"
@@ -180,11 +171,12 @@ const MercadoLibreConnections = () => {
         if (renewAccountId) localStorage.removeItem("renewAccountId");
       };
       processCode();
+      // Limpiar la URL para evitar reprocesamiento
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
-  // Escucha cambios en Firestore para obtener las cuentas conectadas
+  // Escucha cambios en Firestore para obtener las cuentas conectadas.
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       if (snapshot && snapshot.docs) {
@@ -192,6 +184,7 @@ const MercadoLibreConnections = () => {
           id: docSnap.id,
           ...docSnap.data(),
         }));
+        // Ordena las cuentas alfabéticamente por nickname.
         acc.sort((a, b) => {
           const nameA = a.profile?.nickname || "";
           const nameB = b.profile?.nickname || "";
@@ -203,7 +196,7 @@ const MercadoLibreConnections = () => {
     return () => unsub();
   }, []);
 
-  // Verifica la validez de cada token y actualiza el estado
+  // Verifica la validez de cada token y actualiza el estado (activo/inactivo).
   useEffect(() => {
     const updateTokenStatuses = async () => {
       const statuses = {};
