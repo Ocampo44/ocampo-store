@@ -31,17 +31,17 @@ const Publicaciones = () => {
         }));
         const validAccounts = acc.filter((account) => account.token?.access_token);
         setAccounts(validAccounts);
-        console.log("Cuentas cargadas desde Firestore:", validAccounts);
+        console.log("🔥 Cuentas cargadas desde Firestore:", validAccounts);
       }
     });
     return () => unsub();
   }, []);
 
   const saveProductsToDB = async (productsArr) => {
-    console.log("Guardando publicaciones en DB:", productsArr.length);
+    console.log("📝 Guardando publicaciones en DB:", productsArr);
     for (const prod of productsArr) {
       if (!prod.id) {
-        console.warn("Ítem sin ID:", prod);
+        console.warn("⚠️ Ítem sin ID:", prod);
         continue;
       }
       try {
@@ -53,9 +53,9 @@ const Publicaciones = () => {
           },
           { merge: true }
         );
-        console.log(`Ítem ${prod.id} guardado correctamente.`);
+        console.log(`✅ Ítem ${prod.id} guardado correctamente.`);
       } catch (error) {
-        console.error("Error al guardar ítem en DB:", prod.id, error);
+        console.error("❌ Error al guardar ítem en DB:", prod.id, error);
       }
     }
   };
@@ -65,11 +65,11 @@ const Publicaciones = () => {
       const q = query(collection(db, "userProducts"), orderBy("updatedAt", "desc"));
       const querySnapshot = await getDocs(q);
       const prods = querySnapshot.docs.map((docSnap) => docSnap.data());
-      console.log("Publicaciones cargadas desde Firestore:", prods);
+      console.log("📂 Publicaciones cargadas desde Firestore:", prods);
       setProducts(prods);
       setCurrentPage(1);
     } catch (error) {
-      console.error("Error al cargar publicaciones desde Firestore:", error);
+      console.error("❌ Error al cargar publicaciones desde Firestore:", error);
     }
   };
 
@@ -79,7 +79,7 @@ const Publicaciones = () => {
     const limit = 50;
     const additionalParams = "&include_filters=true&search_type=scan";
 
-    console.log(`Cargando publicaciones para ${accounts.length} cuentas...`);
+    console.log(`🚀 Cargando publicaciones para ${accounts.length} cuentas...`);
     if (accounts.length === 0) {
       console.warn("⚠️ No hay cuentas con tokens válidos.");
       setLoading(false);
@@ -90,28 +90,28 @@ const Publicaciones = () => {
       const userId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
       if (!userId || !accessToken) {
-        console.warn("Cuenta sin userId o token válido:", account);
+        console.warn("⚠️ Cuenta sin userId o token válido:", account);
         continue;
       }
       try {
-        console.log(`Consultando publicaciones para el usuario ${userId}`);
+        console.log(`🔍 Consultando publicaciones para el usuario ${userId}`);
         let offset = 0;
         let total = 1;
         while (offset < total) {
           const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}${additionalParams}`;
-          console.log("URL de consulta:", url);
+          console.log("🌐 URL de consulta:", url);
           
           const response = await fetch(url, {
             headers: { Authorization: `Bearer ${accessToken}` },
           });
           if (!response.ok) {
-            console.error(`Error ${response.status} en la petición:`, await response.json());
+            console.error(`❌ Error ${response.status} en la petición:`, await response.json());
             break;
           }
           
           const data = await response.json();
+          console.log(`🟢 Respuesta de la API para ${userId}:`, data);
           if (offset === 0) total = data.paging?.total || 0;
-          console.log(`Usuario ${userId}: obtenidos ${data.results.length} ítems, total esperado ${total}`);
           
           if (!Array.isArray(data.results) || data.results.length === 0) {
             console.warn(`⚠️ No se obtuvieron publicaciones para el usuario ${userId}`);
@@ -128,18 +128,17 @@ const Publicaciones = () => {
           offset += limit;
         }
       } catch (error) {
-        console.error("Error al consultar la API de MercadoLibre:", error);
+        console.error("❌ Error al consultar la API de MercadoLibre:", error);
       }
     }
-    console.log("Total de publicaciones obtenidas antes de guardar:", allProducts);
-    if (allProducts.length === 0) console.warn("⚠️ No se obtuvieron publicaciones desde la API.");
+    console.log("📊 Total de publicaciones obtenidas antes de guardar:", allProducts);
     await saveProductsToDB(allProducts);
     await loadProductsFromDB();
     setLoading(false);
   };
 
   useEffect(() => {
-    console.log("Productos en el estado actual:", products);
+    console.log("📢 Productos en el estado actual:", products);
   }, [products]);
 
   return (
