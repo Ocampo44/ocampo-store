@@ -76,9 +76,9 @@ const Publicaciones = () => {
     }
   };
 
-  // Función para obtener las publicaciones utilizando el endpoint de User Products
-  // Se consulta /users/$USER_ID/items/search con include_filters=true, search_type=scan y status=all.
-  // Se eliminó el filtrado por family_name para traer TODOS los ítems, sin importar el status.
+  // Función para obtener las publicaciones utilizando el endpoint de User Products.
+  // Se consulta /users/$USER_ID/items/search con include_filters=true y search_type=scan.
+  // Se añade el parámetro &status=all para intentar traer ítems de cualquier status.
   const fetchUserProducts = async () => {
     setLoading(true);
     let allProducts = [];
@@ -128,9 +128,7 @@ const Publicaciones = () => {
           }
           const data = await response.json();
           let results = data.results || [];
-          // Se elimina el filtrado por family_name para incluir todos los ítems
-          // results = results.filter((item) => item.family_name != null);
-          // Agregamos información adicional, como el nombre de la cuenta
+          // Se omite cualquier filtrado extra para incluir todos los ítems
           const mapped = results.map((item) => ({
             ...item,
             accountName: account.profile?.nickname || "Sin Nombre",
