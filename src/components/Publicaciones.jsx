@@ -66,7 +66,6 @@ const Publicaciones = () => {
       const querySnapshot = await getDocs(q);
       const prods = querySnapshot.docs.map((docSnap) => docSnap.data());
       console.log("Publicaciones cargadas desde Firestore:", prods.length);
-      if (prods.length === 0) console.warn("⚠️ No hay publicaciones en Firestore");
       setProducts(prods);
       setCurrentPage(1);
     } catch (error) {
@@ -81,6 +80,12 @@ const Publicaciones = () => {
     const additionalParams = "&include_filters=true&search_type=scan";
 
     console.log(`Cargando publicaciones para ${accounts.length} cuentas...`);
+    if (accounts.length === 0) {
+      console.warn("⚠️ No hay cuentas con tokens válidos.");
+      setLoading(false);
+      return;
+    }
+    
     for (const account of accounts) {
       const userId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
@@ -110,6 +115,7 @@ const Publicaciones = () => {
           
           const mapped = data.results.map((item) => ({
             id: item,
+            title: `Publicación ${item}`,
             accountName: account.profile?.nickname || "Sin Nombre",
           }));
           
@@ -121,6 +127,7 @@ const Publicaciones = () => {
       }
     }
     console.log("Total de publicaciones obtenidas:", allProducts.length);
+    if (allProducts.length === 0) console.warn("⚠️ No se obtuvieron publicaciones desde la API.");
     await saveProductsToDB(allProducts);
     await loadProductsFromDB();
     setLoading(false);
