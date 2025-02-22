@@ -90,19 +90,32 @@ const Publicaciones = () => {
       }
       try {
         console.log(`Consultando publicaciones para el usuario ${userId}`);
-        const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&include_filters=true&search_type=scan`;
-        console.log("URL de consulta:", url);
-        
-        const firstResponse = await fetch(url, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (!firstResponse.ok) {
-          console.error(`Error ${firstResponse.status} en la petición:`, await firstResponse.json());
-          continue;
+        let offset = 0;
+        let total = 1;
+        while (offset < total) {
+          const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}${additionalParams}`;
+          console.log("URL de consulta:", url);
+          
+          const response = await fetch(url, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (!response.ok) {
+            console.error(`Error ${response.status} en la petición:`, await response.json());
+            break;
+          }
+          
+          const data = await response.json();
+          if (offset === 0) total = data.paging?.total || 0;
+          console.log(`Usuario ${userId}: obtenidos ${data.results.length} ítems, total esperado ${total}`);
+          
+          const mapped = data.results.map((item) => ({
+            id: item,
+            accountName: account.profile?.nickname || "Sin Nombre",
+          }));
+          
+          allProducts = allProducts.concat(mapped);
+          offset += limit;
         }
-        
-        const firstData = await firstResponse.json();
-        console.log("Primera respuesta de la API:", firstData);
       } catch (error) {
         console.error("Error al consultar la API de MercadoLibre:", error);
       }
