@@ -1,6 +1,6 @@
 // src/App.js
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 // Importar Firestore y configuración
 import { db } from "./firebaseConfig";
@@ -33,7 +33,7 @@ import EditCompraForm from "./components/EditCompraForm";
 
 // Componentes para MercadoLibre
 import MercadoLibreConnections from "./components/MercadoLibreConnections";
-// Incluir el componente Publicaciones
+// Importar Publicaciones
 import Publicaciones from "./components/Publicaciones";
 
 function App() {
@@ -292,6 +292,8 @@ function App() {
         <Sidebar />
         <div className="flex-1 p-4 ml-64">
           <Routes>
+            {/* Ruta por defecto: redirige a /productos */}
+            <Route path="/" element={<Navigate to="/productos" />} />
             <Route
               path="/productos"
               element={
@@ -389,7 +391,7 @@ function App() {
             />
             {/* Rutas MercadoLibre */}
             <Route path="/mercadolibre" element={<MercadoLibreConnections />} />
-            {/* Agregamos la ruta de Publicaciones */}
+            {/* Ruta de Publicaciones */}
             <Route path="/publicaciones" element={<Publicaciones />} />
           </Routes>
         </div>

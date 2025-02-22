@@ -51,7 +51,8 @@ const Publicaciones = () => {
 
   // Filtra las publicaciones en base a la búsqueda ingresada
   const publicacionesFiltradas = publicaciones.filter((item) =>
-    item.title.toLowerCase().includes(busqueda.toLowerCase())
+    // Se asegura que item.title esté definido
+    (item.title ? item.title.toLowerCase() : "").includes(busqueda.toLowerCase())
   );
 
   return (
