@@ -1,4 +1,4 @@
-// App.js
+// src/App.js
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
@@ -33,7 +33,7 @@ import EditCompraForm from "./components/EditCompraForm";
 
 // Componentes para MercadoLibre
 import MercadoLibreConnections from "./components/MercadoLibreConnections";
-import Publicaciones from "./components/Publicaciones"; // Asegúrate de tener este componente
+import Publicaciones from "./components/Publicaciones"; // <--- Importa Publicaciones
 
 function App() {
   const [warehouses, setWarehouses] = useState([]);
@@ -386,6 +386,8 @@ function App() {
               path="/compras/editar/:id"
               element={<EditCompraForm warehouses={warehouses} productosDisponibles={products} />}
             />
+
+            {/* Rutas MercadoLibre */}
             <Route path="/mercadolibre" element={<MercadoLibreConnections />} />
             <Route path="/publicaciones" element={<Publicaciones />} />
           </Routes>

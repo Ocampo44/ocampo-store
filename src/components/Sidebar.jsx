@@ -8,8 +8,7 @@ const Sidebar = () => {
   // Función de ejemplo para MercadoLibre
   const handleMercadoLibre = () => {
     console.log("Navegando a la sección MercadoLibre");
-    // Si deseas redirigir manualmente, podrías usar:
-    // window.location.href = "/mercadolibre";
+    // Podrías redirigir manualmente o simplemente usar <Link />
   };
 
   return (
@@ -37,6 +36,7 @@ const Sidebar = () => {
             to="/productos"
             className="flex items-center gap-4 px-4 py-3 hover:bg-indigo-600 transition-colors"
           >
+            {/* Ícono */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="w-6 h-6"
