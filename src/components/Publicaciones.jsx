@@ -29,20 +29,21 @@ const Publicaciones = () => {
     let total = 0;
     try {
       do {
+        // Puedes probar removiendo el header Authorization, ya que este endpoint es público
         const response = await fetch(
-          `https://api.mercadolibre.com/sites/${SITE_ID}/search?seller_id=${sellerId}&limit=${limit}&offset=${offset}`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-          }
+          `https://api.mercadolibre.com/sites/${SITE_ID}/search?seller_id=${sellerId}&limit=${limit}&offset=${offset}`
+          // ,{
+          //   headers: {
+          //     Authorization: `Bearer ${accessToken}`,
+          //   },
+          // }
         );
-        // Convertimos la respuesta a JSON y la mostramos en consola para depuración
         const data = await response.json();
         console.log("Respuesta de publicaciones para vendedor", sellerId, data);
         if (!response.ok) {
           console.error(
-            `Error al obtener publicaciones para el vendedor ${sellerId}: ${response.status}`
+            `Error al obtener publicaciones para el vendedor ${sellerId}: ${response.status}`,
+            data
           );
           break;
         }
@@ -64,9 +65,10 @@ const Publicaciones = () => {
     const fetchAllPublicaciones = async () => {
       const pubs = {};
       for (const account of accounts) {
+        // Usamos el token si lo necesitamos, pero recuerda verificar si la cuenta pertenece al SITE_ID correcto.
         const accessToken = account.token?.access_token;
         const sellerId = account.profile?.id;
-        if (accessToken && sellerId) {
+        if (sellerId) {
           const items = await fetchPublicacionesForSeller(accessToken, sellerId);
           // Calcula el total de páginas (mostrando 50 ítems por página)
           const totalPages = Math.ceil(items.length / 50);
@@ -99,7 +101,9 @@ const Publicaciones = () => {
   return (
     <div style={{ padding: "20px" }}>
       <h1>Publicaciones de Cuentas Conectadas</h1>
-      {Object.keys(publicaciones).length === 0 && <p>No se encontraron publicaciones.</p>}
+      {Object.keys(publicaciones).length === 0 && (
+        <p>No se encontraron publicaciones.</p>
+      )}
       {Object.entries(publicaciones).map(([sellerId, pubData]) => {
         const { items, currentPage, totalPages } = pubData;
         // Se calcula el slice de ítems para mostrar 50 por página
