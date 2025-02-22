@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 
 const Publicaciones = () => {
-  const [products, setProducts] = useState([]); // Publicaciones con nuevo modelo (User Products)
+  const [products, setProducts] = useState([]); // Publicaciones (todos los ítems)
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({
@@ -77,14 +77,14 @@ const Publicaciones = () => {
   };
 
   // Función para obtener las publicaciones utilizando el endpoint de User Products
-  // Se consulta /users/$USER_ID/items/search con include_filters=true y search_type=scan.
-  // Se filtran aquellos ítems que tengan family_name (indicativo del nuevo modelo).
+  // Se consulta /users/$USER_ID/items/search con include_filters=true, search_type=scan y status=all.
+  // Se eliminó el filtrado por family_name para traer TODOS los ítems, sin importar el status.
   const fetchUserProducts = async () => {
     setLoading(true);
     let allProducts = [];
     const limit = 50; // límite máximo permitido por la API
-    // Parámetros adicionales para incluir filtros y poder escanear más de 1000 registros
-    const additionalParams = "&include_filters=true&search_type=scan";
+    // Parámetros adicionales para incluir filtros, escanear más de 1000 registros y traer todos los status
+    const additionalParams = "&include_filters=true&search_type=scan&status=all";
 
     for (const account of accounts) {
       // Se utiliza el ID de perfil o el ID de la cuenta
@@ -128,8 +128,8 @@ const Publicaciones = () => {
           }
           const data = await response.json();
           let results = data.results || [];
-          // Filtramos ítems que tengan definido family_name (nuevo modelo de User Products)
-          results = results.filter((item) => item.family_name != null);
+          // Se elimina el filtrado por family_name para incluir todos los ítems
+          // results = results.filter((item) => item.family_name != null);
           // Agregamos información adicional, como el nombre de la cuenta
           const mapped = results.map((item) => ({
             ...item,
@@ -180,10 +180,10 @@ const Publicaciones = () => {
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>
-        Publicaciones (User Products - Nuevo Modelo de Precio por Variación)
+        Publicaciones (Todos los ítems de MercadoLibre sin importar su status)
       </h1>
       <button onClick={fetchUserProducts} style={styles.fetchButton}>
-        Traer Publicaciones (Nuevos)
+        Traer Publicaciones (Todos)
       </button>
       <div style={styles.filterContainer}>
         <input
