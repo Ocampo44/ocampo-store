@@ -5,9 +5,9 @@ import { db } from "../firebaseConfig";
 
 const Publicaciones = () => {
   const [accounts, setAccounts] = useState([]);
-  // Objeto donde cada clave es el sellerId y su valor contiene: { items: [...], currentPage: 1, totalPages: N }
+  // Objeto: { [sellerId]: { items: [...], currentPage: 1, totalPages: N } }
   const [publicaciones, setPublicaciones] = useState({});
-  const SITE_ID = "MLM"; // Cambia este valor según la región (por ejemplo, MLA, MLB, etc.)
+  const SITE_ID = "MLM"; // Cambia este valor según la región (MLM, MLA, MLB, etc.)
 
   // Escucha en tiempo real las cuentas conectadas en Firestore
   useEffect(() => {
@@ -21,23 +21,17 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para traer todas las publicaciones de un vendedor paginando las peticiones a la API
-  const fetchPublicacionesForSeller = async (accessToken, sellerId) => {
+  // Función para traer todas las publicaciones de un vendedor
+  // utilizando paginación con limit=100 y offset
+  const fetchPublicacionesForSeller = async (sellerId) => {
     const items = [];
     let offset = 0;
-    const limit = 100; // Límite máximo por llamada
+    const limit = 100; // Límite máximo permitido por llamada
     let total = 0;
     try {
       do {
-        // Puedes probar removiendo el header Authorization, ya que este endpoint es público
-        const response = await fetch(
-          `https://api.mercadolibre.com/sites/${SITE_ID}/search?seller_id=${sellerId}&limit=${limit}&offset=${offset}`
-          // ,{
-          //   headers: {
-          //     Authorization: `Bearer ${accessToken}`,
-          //   },
-          // }
-        );
+        const url = `https://api.mercadolibre.com/sites/${SITE_ID}/search?seller_id=${sellerId}&limit=${limit}&offset=${offset}`;
+        const response = await fetch(url);
         const data = await response.json();
         console.log("Respuesta de publicaciones para vendedor", sellerId, data);
         if (!response.ok) {
@@ -60,17 +54,15 @@ const Publicaciones = () => {
     return items;
   };
 
-  // Para cada cuenta conectada, se consultan y se guardan todas las publicaciones
+  // Para cada cuenta conectada, se consultan y guardan todas las publicaciones
   useEffect(() => {
     const fetchAllPublicaciones = async () => {
       const pubs = {};
       for (const account of accounts) {
-        // Usamos el token si lo necesitamos, pero recuerda verificar si la cuenta pertenece al SITE_ID correcto.
-        const accessToken = account.token?.access_token;
         const sellerId = account.profile?.id;
         if (sellerId) {
-          const items = await fetchPublicacionesForSeller(accessToken, sellerId);
-          // Calcula el total de páginas (mostrando 50 ítems por página)
+          const items = await fetchPublicacionesForSeller(sellerId);
+          // Calcula cuántas páginas (de 50 ítems por página) se deben mostrar
           const totalPages = Math.ceil(items.length / 50);
           pubs[sellerId] = {
             items,
@@ -106,7 +98,7 @@ const Publicaciones = () => {
       )}
       {Object.entries(publicaciones).map(([sellerId, pubData]) => {
         const { items, currentPage, totalPages } = pubData;
-        // Se calcula el slice de ítems para mostrar 50 por página
+        // Se calcula el slice para mostrar 50 ítems por página
         const startIndex = (currentPage - 1) * 50;
         const endIndex = startIndex + 50;
         const itemsToShow = items.slice(startIndex, endIndex);
@@ -155,7 +147,10 @@ const Publicaciones = () => {
                 </span>
                 <button
                   onClick={() =>
-                    handlePageChange(sellerId, Math.min(currentPage + 1, totalPages))
+                    handlePageChange(
+                      sellerId,
+                      Math.min(currentPage + 1, totalPages)
+                    )
                   }
                   disabled={currentPage === totalPages}
                 >
