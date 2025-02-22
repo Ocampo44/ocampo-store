@@ -83,58 +83,58 @@ const Publicaciones = () => {
     }
   };
 
-  // Función para obtener ítems usando el endpoint por vendedor con envío gratis
+  // Función para obtener ítems usando el endpoint /users/$USER_ID/items/search
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
     const limit = 50; // límite máximo permitido por la API
     for (const account of accounts) {
       // Usamos el ID de perfil o el ID de la cuenta
-      const sellerId = account.profile?.id || account.id;
+      const userId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
-      if (!sellerId || !accessToken) {
-        console.warn("Cuenta sin sellerId o token:", account);
+      if (!userId || !accessToken) {
+        console.warn("Cuenta sin userId o token:", account);
         continue;
       }
       try {
-        console.log(`Consultando ítems para el vendedor ${sellerId}`);
-        // Usamos el endpoint /sites/MLM/search con seller_id y shipping_cost=free
+        console.log(`Consultando ítems para el usuario ${userId}`);
+        // Consulta inicial para obtener el total
         const firstResponse = await fetch(
-          `https://api.mercadolibre.com/sites/MLM/search?seller_id=${sellerId}&shipping_cost=free&limit=${limit}&offset=0`,
+          `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=0`,
           {
             headers: { Authorization: `Bearer ${accessToken}` },
           }
         );
         if (!firstResponse.ok) {
           console.error(
-            `Error al obtener ítems para ${sellerId}: ${firstResponse.status}`
+            `Error al obtener ítems para ${userId}: ${firstResponse.status}`
           );
           continue;
         }
         const firstData = await firstResponse.json();
         const total = firstData.paging?.total || 0;
-        console.log(`Vendedor ${sellerId} - Total ítems: ${total}`);
+        console.log(`Usuario ${userId} - Total ítems: ${total}`);
         let offset = 0;
         if (total === 0) {
-          console.warn(`No se encontraron ítems para ${sellerId}`);
+          console.warn(`No se encontraron ítems para ${userId}`);
         }
         while (offset < total) {
           const pagedResponse = await fetch(
-            `https://api.mercadolibre.com/sites/MLM/search?seller_id=${sellerId}&shipping_cost=free&limit=${limit}&offset=${offset}`,
+            `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}`,
             {
               headers: { Authorization: `Bearer ${accessToken}` },
             }
           );
           if (!pagedResponse.ok) {
             console.error(
-              `Error (offset ${offset}) para ${sellerId}: ${pagedResponse.status}`
+              `Error (offset ${offset}) para ${userId}: ${pagedResponse.status}`
             );
             break;
           }
           const pagedData = await pagedResponse.json();
           const pagedResults = pagedData.results || [];
           console.log(
-            `Offset ${offset} para ${sellerId}: ${pagedResults.length} ítems`
+            `Offset ${offset} para ${userId}: ${pagedResults.length} ítems`
           );
           const mappedResults = pagedResults.map((item) => ({
             ...item,
@@ -145,7 +145,7 @@ const Publicaciones = () => {
           offset += limit;
         }
       } catch (error) {
-        console.error("Error consultando ítems para el vendedor", sellerId, error);
+        console.error("Error consultando ítems para el usuario", userId, error);
       }
     }
     console.log("Total ítems obtenidos:", allPublicaciones.length);
@@ -185,7 +185,7 @@ const Publicaciones = () => {
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Ítems con Envío Gratis (Vendedor)</h1>
+      <h1 style={styles.title}>Ítems Publicados (Usuario)</h1>
       <button onClick={fetchPublicaciones} style={styles.fetchButton}>
         Traer Publicaciones (Nuevos)
       </button>
