@@ -34,16 +34,10 @@ const Publicaciones = () => {
             if (response.ok) {
               const data = await response.json();
               // data.results contiene los ítems publicados
-              todasLasPublicaciones = todasLasPublicaciones.concat(
-                data.results || []
-              );
+              todasLasPublicaciones = todasLasPublicaciones.concat(data.results || []);
             }
           } catch (error) {
-            console.error(
-              "Error al traer publicaciones para la cuenta:",
-              cuenta.id,
-              error
-            );
+            console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
           }
         }
       }

@@ -13,9 +13,7 @@ const Sidebar = () => {
 
   return (
     <div
-      className={`fixed top-0 left-0 h-full bg-gradient-to-b from-blue-800 to-indigo-700 text-white shadow-2xl transition-all duration-300 z-50 ${
-        isOpen ? 'w-64' : 'w-16'
-      }`}
+      className={`fixed top-0 left-0 h-full bg-gradient-to-b from-blue-800 to-indigo-700 text-white shadow-2xl transition-all duration-300 z-50 ${isOpen ? 'w-64' : 'w-16'}`}
       onMouseEnter={() => setIsOpen(true)}
       onMouseLeave={() => setIsOpen(false)}
     >
@@ -36,7 +34,6 @@ const Sidebar = () => {
             to="/productos"
             className="flex items-center gap-4 px-4 py-3 hover:bg-indigo-600 transition-colors"
           >
-            {/* Ícono */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="w-6 h-6"
