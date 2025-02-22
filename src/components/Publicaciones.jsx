@@ -7,7 +7,7 @@ const Publicaciones = () => {
   const [accounts, setAccounts] = useState([]);
   // Estructura: { [sellerId]: { items: [...], currentPage: 1, totalPages: N } }
   const [publicaciones, setPublicaciones] = useState({});
-  const SITE_ID = "MLM"; // Cambia este valor según la región (MLM, MLA, MLB, etc.)
+  const SITE_ID = "MLM"; // Cambia según la región: "MLM" para México, "MLA" para Argentina, etc.
 
   // Escucha en tiempo real las cuentas conectadas en Firestore
   useEffect(() => {
@@ -29,6 +29,7 @@ const Publicaciones = () => {
     let total = 0;
     try {
       do {
+        // Se construye la URL usando limit=50
         const url = `https://api.mercadolibre.com/sites/${SITE_ID}/search?seller_id=${sellerId}&limit=${limit}&offset=${offset}`;
         const response = await fetch(url);
         const data = await response.json();
@@ -61,7 +62,7 @@ const Publicaciones = () => {
         const sellerId = account.profile?.id;
         if (sellerId) {
           const items = await fetchPublicacionesForSeller(sellerId);
-          // Calcula el total de páginas (50 ítems por página)
+          // Calcula el total de páginas para la UI (50 ítems por página)
           const totalPages = Math.ceil(items.length / 50);
           pubs[sellerId] = {
             items,
@@ -78,7 +79,7 @@ const Publicaciones = () => {
     }
   }, [accounts]);
 
-  // Función para manejar el cambio de página en la interfaz para cada vendedor
+  // Función para cambiar de página en la interfaz para cada vendedor
   const handlePageChange = (sellerId, newPage) => {
     setPublicaciones((prev) => ({
       ...prev,
@@ -146,7 +147,10 @@ const Publicaciones = () => {
                 </span>
                 <button
                   onClick={() =>
-                    handlePageChange(sellerId, Math.min(currentPage + 1, totalPages))
+                    handlePageChange(
+                      sellerId,
+                      Math.min(currentPage + 1, totalPages)
+                    )
                   }
                   disabled={currentPage === totalPages}
                 >
