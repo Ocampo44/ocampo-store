@@ -22,7 +22,7 @@ const Publicaciones = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50; // 50 publicaciones por pestaña
 
-  // Escuchar las cuentas conectadas en Firestore
+  // Escuchar cuentas conectadas en Firestore (mercadolibreUsers)
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       if (snapshot && snapshot.docs) {
@@ -97,8 +97,9 @@ const Publicaciones = () => {
       }
       try {
         console.log(`Consultando publicaciones para la cuenta ${sellerId}`);
+        // Sin el parámetro status=all (versión anterior)
         const firstResponse = await fetch(
-          `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=0&status=all`,
+          `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=0`,
           {
             headers: { Authorization: `Bearer ${accessToken}` },
           }
@@ -118,7 +119,7 @@ const Publicaciones = () => {
         }
         while (offset < total) {
           const pagedResponse = await fetch(
-            `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=${offset}&status=all`,
+            `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=${offset}`,
             {
               headers: { Authorization: `Bearer ${accessToken}` },
             }
@@ -131,7 +132,9 @@ const Publicaciones = () => {
           }
           const pagedData = await pagedResponse.json();
           const pagedResults = pagedData.results || [];
-          console.log(`Offset ${offset} para ${sellerId}: ${pagedResults.length} publicaciones`);
+          console.log(
+            `Offset ${offset} para ${sellerId}: ${pagedResults.length} publicaciones`
+          );
           const mappedResults = pagedResults.map((item) => ({
             ...item,
             estado: item.status || "active",
@@ -157,8 +160,12 @@ const Publicaciones = () => {
   };
 
   const filteredPublicaciones = publicaciones.filter((pub) => {
-    const matchesTitulo = pub.title?.toLowerCase().includes(filters.titulo.toLowerCase());
-    const matchesAccount = pub.accountName?.toLowerCase().includes(filters.account.toLowerCase());
+    const matchesTitulo = pub.title
+      ?.toLowerCase()
+      .includes(filters.titulo.toLowerCase());
+    const matchesAccount = pub.accountName
+      ?.toLowerCase()
+      .includes(filters.account.toLowerCase());
     const matchesId = pub.id?.toString().includes(filters.publicationId);
     return matchesTitulo && matchesAccount && matchesId;
   });
