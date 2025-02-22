@@ -65,7 +65,7 @@ const Publicaciones = () => {
       const q = query(collection(db, "userProducts"), orderBy("updatedAt", "desc"));
       const querySnapshot = await getDocs(q);
       const prods = querySnapshot.docs.map((docSnap) => docSnap.data());
-      console.log("Publicaciones cargadas desde Firestore:", prods.length);
+      console.log("Publicaciones cargadas desde Firestore:", prods);
       setProducts(prods);
       setCurrentPage(1);
     } catch (error) {
@@ -126,7 +126,7 @@ const Publicaciones = () => {
         console.error("Error al consultar la API de MercadoLibre:", error);
       }
     }
-    console.log("Total de publicaciones obtenidas:", allProducts.length);
+    console.log("Total de publicaciones obtenidas antes de guardar:", allProducts);
     if (allProducts.length === 0) console.warn("⚠️ No se obtuvieron publicaciones desde la API.");
     await saveProductsToDB(allProducts);
     await loadProductsFromDB();
@@ -134,7 +134,7 @@ const Publicaciones = () => {
   };
 
   useEffect(() => {
-    console.log("Productos en el estado:", products);
+    console.log("Productos en el estado actual:", products);
   }, [products]);
 
   return (
