@@ -5,11 +5,11 @@ import { db } from "../firebaseConfig";
 
 const Publicaciones = () => {
   const [accounts, setAccounts] = useState([]);
-  // Estructura: { [sellerId]: { items: [...], currentPage: 1, totalPages: N } }
+  // Objeto donde cada clave es el sellerId y su valor contiene: { items: [...], currentPage: 1, totalPages: N }
   const [publicaciones, setPublicaciones] = useState({});
-  const SITE_ID = "MLM"; // Cambiar según corresponda
+  const SITE_ID = "MLM"; // Cambia este valor según la región (por ejemplo, MLA, MLB, etc.)
 
-  // Escucha las cuentas conectadas en Firestore
+  // Escucha en tiempo real las cuentas conectadas en Firestore
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const acc = snapshot.docs.map((docSnap) => ({
@@ -37,17 +37,18 @@ const Publicaciones = () => {
             },
           }
         );
-        if (response.ok) {
-          const data = await response.json();
-          items.push(...data.results);
-          total = data.paging.total;
-          offset += limit;
-        } else {
+        // Convertimos la respuesta a JSON y la mostramos en consola para depuración
+        const data = await response.json();
+        console.log("Respuesta de publicaciones para vendedor", sellerId, data);
+        if (!response.ok) {
           console.error(
             `Error al obtener publicaciones para el vendedor ${sellerId}: ${response.status}`
           );
           break;
         }
+        items.push(...data.results);
+        total = data.paging.total;
+        offset += limit;
       } while (offset < total);
     } catch (error) {
       console.error(
@@ -58,7 +59,7 @@ const Publicaciones = () => {
     return items;
   };
 
-  // Para cada cuenta, se consultan y se guardan todas las publicaciones
+  // Para cada cuenta conectada, se consultan y se guardan todas las publicaciones
   useEffect(() => {
     const fetchAllPublicaciones = async () => {
       const pubs = {};
@@ -84,7 +85,7 @@ const Publicaciones = () => {
     }
   }, [accounts]);
 
-  // Funciones de paginación para cada vendedor
+  // Función para manejar el cambio de página para cada vendedor
   const handlePageChange = (sellerId, newPage) => {
     setPublicaciones((prev) => ({
       ...prev,
@@ -101,7 +102,7 @@ const Publicaciones = () => {
       {Object.keys(publicaciones).length === 0 && <p>No se encontraron publicaciones.</p>}
       {Object.entries(publicaciones).map(([sellerId, pubData]) => {
         const { items, currentPage, totalPages } = pubData;
-        // Determina el slice para mostrar 50 ítems por página
+        // Se calcula el slice de ítems para mostrar 50 por página
         const startIndex = (currentPage - 1) * 50;
         const endIndex = startIndex + 50;
         const itemsToShow = items.slice(startIndex, endIndex);
