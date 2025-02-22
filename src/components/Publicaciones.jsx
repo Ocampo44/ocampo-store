@@ -20,28 +20,30 @@ const Publicaciones = () => {
     publicationId: "",
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 50; // 50 publicaciones por pestaña
+  const pageSize = 50; // Mostrar 50 productos por pestaña
 
-  // Escuchar las cuentas conectadas en Firestore
+  // Escuchar las cuentas conectadas en Firestore (colección mercadolibreUsers)
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
-      if (snapshot && snapshot.docs) {
-        const acc = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        }));
-        console.log("Cuentas obtenidas:", acc.length);
-        const activeAccounts = acc.filter(
-          (account) => account.token?.access_token
-        );
-        console.log("Cuentas activas:", activeAccounts.length);
-        setAccounts(activeAccounts);
+    const unsub = onSnapshot(
+      collection(db, "mercadolibreUsers"),
+      (snapshot) => {
+        if (snapshot && snapshot.docs) {
+          const acc = snapshot.docs.map((docSnap) => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          }));
+          // Filtrar cuentas con token válido (activas)
+          const activeAccounts = acc.filter(
+            (account) => account.token?.access_token
+          );
+          setAccounts(activeAccounts);
+        }
       }
-    });
+    );
     return () => unsub();
   }, []);
 
-  // Guardar o actualizar publicaciones en Firestore
+  // Función para guardar o actualizar las publicaciones en Firestore
   const savePublicacionesToDB = async (publicacionesArr) => {
     console.log("Guardando publicaciones en DB:", publicacionesArr.length);
     for (const pub of publicacionesArr) {
@@ -55,7 +57,7 @@ const Publicaciones = () => {
           doc(db, "publicaciones", pub.id.toString()),
           {
             ...pub,
-            updatedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(), // marca de tiempo de actualización
           },
           { merge: true }
         );
@@ -66,7 +68,7 @@ const Publicaciones = () => {
     }
   };
 
-  // Cargar publicaciones desde Firestore
+  // Función para cargar publicaciones desde Firestore (ordenadas por updatedAt descendente)
   const loadPublicacionesFromDB = async () => {
     try {
       const q = query(
@@ -83,86 +85,101 @@ const Publicaciones = () => {
     }
   };
 
-  // Obtener publicaciones desde la API y guardarlas en Firestore
+  // Función para obtener (y guardar) las publicaciones desde la API
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
-    const limit = 50;
+    const limit = 50; // máximo permitido por la API
     for (const account of accounts) {
       const sellerId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
-      if (!sellerId || !accessToken) {
-        console.warn("Cuenta sin sellerId o token:", account);
-        continue;
-      }
+      if (!sellerId || !accessToken) continue;
+
       try {
-        console.log(`Consultando publicaciones para la cuenta ${sellerId}`);
+        // Primer llamado para obtener el total de publicaciones
         const firstResponse = await fetch(
           `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=0&status=all`,
           {
-            headers: { Authorization: `Bearer ${accessToken}` },
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
           }
         );
         if (!firstResponse.ok) {
           console.error(
-            `Error al obtener publicaciones para ${sellerId}: ${firstResponse.status}`
+            `Error al obtener publicaciones de la cuenta ${account.id}: ${firstResponse.status}`
           );
           continue;
         }
         const firstData = await firstResponse.json();
         const total = firstData.paging?.total || 0;
-        console.log(`Cuenta ${sellerId} - Total publicaciones: ${total}`);
+        console.log(`Cuenta ${account.id} - Total publicaciones: ${total}`);
         let offset = 0;
-        if (total === 0) {
-          console.warn(`No se encontraron publicaciones para ${sellerId}`);
-        }
+
         while (offset < total) {
           const pagedResponse = await fetch(
             `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=${offset}&status=all`,
             {
-              headers: { Authorization: `Bearer ${accessToken}` },
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+              },
             }
           );
           if (!pagedResponse.ok) {
             console.error(
-              `Error (offset ${offset}) para ${sellerId}: ${pagedResponse.status}`
+              `Error al obtener publicaciones (offset: ${offset}) para la cuenta ${account.id}: ${pagedResponse.status}`
             );
             break;
           }
           const pagedData = await pagedResponse.json();
-          const pagedResults = pagedData.results || [];
-          console.log(`Offset ${offset} para ${sellerId}: ${pagedResults.length} publicaciones`);
-          const mappedResults = pagedResults.map((item) => ({
+          let pagedResults = pagedData.results || [];
+          console.log(
+            `Obtenidas ${pagedResults.length} publicaciones para offset ${offset}`
+          );
+          pagedResults = pagedResults.map((item) => ({
             ...item,
             estado: item.status || "active",
             accountName: account.profile?.nickname || "Sin Nombre",
           }));
-          allPublicaciones = allPublicaciones.concat(mappedResults);
+          allPublicaciones = allPublicaciones.concat(pagedResults);
           offset += limit;
         }
       } catch (error) {
-        console.error("Error en la cuenta", sellerId, error);
+        console.error(
+          "Error al obtener publicaciones para la cuenta",
+          account.id,
+          error
+        );
       }
     }
     console.log("Total publicaciones obtenidas:", allPublicaciones.length);
+    // Guardar o actualizar en Firestore
     await savePublicacionesToDB(allPublicaciones);
+    // Luego, recargar desde la DB
     await loadPublicacionesFromDB();
     setLoading(false);
   };
 
+  // Manejo de filtros para buscar por título, cuenta o ID
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
-    setCurrentPage(1);
+    setCurrentPage(1); // Reinicia la paginación al filtrar
   };
 
+  // Filtrar las publicaciones según los filtros aplicados
   const filteredPublicaciones = publicaciones.filter((pub) => {
-    const matchesTitulo = pub.title?.toLowerCase().includes(filters.titulo.toLowerCase());
-    const matchesAccount = pub.accountName?.toLowerCase().includes(filters.account.toLowerCase());
+    const matchesTitulo = pub.title
+      ?.toLowerCase()
+      .includes(filters.titulo.toLowerCase());
+    const matchesAccount = pub.accountName
+      ?.toLowerCase()
+      .includes(filters.account.toLowerCase());
     const matchesId = pub.id?.toString().includes(filters.publicationId);
     return matchesTitulo && matchesAccount && matchesId;
   });
 
+  // Paginación en la UI (50 items por pestaña)
   const totalPages = Math.ceil(filteredPublicaciones.length / pageSize);
   const paginatedPublicaciones = filteredPublicaciones.slice(
     (currentPage - 1) * pageSize,
@@ -226,7 +243,11 @@ const Publicaciones = () => {
                 <tr key={pub.id}>
                   <td style={styles.td}>
                     {pub.pictures && pub.pictures.length > 0 ? (
-                      <img src={pub.pictures[0].url} alt={pub.title} style={{ width: "50px" }} />
+                      <img
+                        src={pub.pictures[0].url}
+                        alt={pub.title}
+                        style={{ width: "50px" }}
+                      />
                     ) : (
                       "Sin imagen"
                     )}
@@ -241,13 +262,21 @@ const Publicaciones = () => {
             </tbody>
           </table>
           <div style={styles.pagination}>
-            <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} style={styles.pageButton}>
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              style={styles.pageButton}
+            >
               Anterior
             </button>
             <span style={styles.pageInfo}>
               Página {currentPage} de {totalPages}
             </span>
-            <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} style={styles.pageButton}>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              style={styles.pageButton}
+            >
               Siguiente
             </button>
           </div>
