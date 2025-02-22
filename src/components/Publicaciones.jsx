@@ -20,9 +20,9 @@ const Publicaciones = () => {
     publicationId: "",
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 50; // 50 publicaciones por pestaña
+  const pageSize = 50; // 50 ítems por página
 
-  // Escuchar cuentas conectadas en Firestore (mercadolibreUsers)
+  // Escucha la colección de mercadolibreUsers en Firestore
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       if (snapshot && snapshot.docs) {
@@ -31,6 +31,7 @@ const Publicaciones = () => {
           ...docSnap.data(),
         }));
         console.log("Cuentas obtenidas:", acc.length);
+        // Solo usamos las cuentas con token válido
         const activeAccounts = acc.filter(
           (account) => account.token?.access_token
         );
@@ -41,16 +42,15 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Guardar o actualizar publicaciones en Firestore
+  // Función para guardar o actualizar ítems en Firestore
   const savePublicacionesToDB = async (publicacionesArr) => {
     console.log("Guardando publicaciones en DB:", publicacionesArr.length);
     for (const pub of publicacionesArr) {
       if (!pub.id) {
-        console.warn("Publicación sin ID:", pub);
+        console.warn("Ítem sin ID:", pub);
         continue;
       }
       try {
-        console.log(`Guardando publicación ${pub.id}...`);
         await setDoc(
           doc(db, "publicaciones", pub.id.toString()),
           {
@@ -59,14 +59,14 @@ const Publicaciones = () => {
           },
           { merge: true }
         );
-        console.log(`Publicación ${pub.id} guardada correctamente.`);
+        console.log(`Ítem ${pub.id} guardado correctamente.`);
       } catch (error) {
-        console.error("Error al guardar publicación en DB:", pub.id, error);
+        console.error("Error al guardar ítem en DB:", pub.id, error);
       }
     }
   };
 
-  // Cargar publicaciones desde Firestore
+  // Función para cargar los ítems desde Firestore
   const loadPublicacionesFromDB = async () => {
     try {
       const q = query(
@@ -75,20 +75,21 @@ const Publicaciones = () => {
       );
       const querySnapshot = await getDocs(q);
       const pubs = querySnapshot.docs.map((docSnap) => docSnap.data());
-      console.log("Publicaciones cargadas desde DB:", pubs.length);
+      console.log("Ítems cargados desde DB:", pubs.length);
       setPublicaciones(pubs);
       setCurrentPage(1);
     } catch (error) {
-      console.error("Error al cargar publicaciones desde DB", error);
+      console.error("Error al cargar ítems desde DB", error);
     }
   };
 
-  // Obtener publicaciones desde la API y guardarlas en Firestore
+  // Función para obtener ítems usando el endpoint por vendedor con envío gratis
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
-    const limit = 50;
+    const limit = 50; // límite máximo permitido por la API
     for (const account of accounts) {
+      // Usamos el ID de perfil o el ID de la cuenta
       const sellerId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
       if (!sellerId || !accessToken) {
@@ -96,30 +97,30 @@ const Publicaciones = () => {
         continue;
       }
       try {
-        console.log(`Consultando publicaciones para la cuenta ${sellerId}`);
-        // Sin el parámetro status=all (versión anterior)
+        console.log(`Consultando ítems para el vendedor ${sellerId}`);
+        // Usamos el endpoint /sites/MLM/search con seller_id y shipping_cost=free
         const firstResponse = await fetch(
-          `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=0`,
+          `https://api.mercadolibre.com/sites/MLM/search?seller_id=${sellerId}&shipping_cost=free&limit=${limit}&offset=0`,
           {
             headers: { Authorization: `Bearer ${accessToken}` },
           }
         );
         if (!firstResponse.ok) {
           console.error(
-            `Error al obtener publicaciones para ${sellerId}: ${firstResponse.status}`
+            `Error al obtener ítems para ${sellerId}: ${firstResponse.status}`
           );
           continue;
         }
         const firstData = await firstResponse.json();
         const total = firstData.paging?.total || 0;
-        console.log(`Cuenta ${sellerId} - Total publicaciones: ${total}`);
+        console.log(`Vendedor ${sellerId} - Total ítems: ${total}`);
         let offset = 0;
         if (total === 0) {
-          console.warn(`No se encontraron publicaciones para ${sellerId}`);
+          console.warn(`No se encontraron ítems para ${sellerId}`);
         }
         while (offset < total) {
           const pagedResponse = await fetch(
-            `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=${offset}`,
+            `https://api.mercadolibre.com/sites/MLM/search?seller_id=${sellerId}&shipping_cost=free&limit=${limit}&offset=${offset}`,
             {
               headers: { Authorization: `Bearer ${accessToken}` },
             }
@@ -133,7 +134,7 @@ const Publicaciones = () => {
           const pagedData = await pagedResponse.json();
           const pagedResults = pagedData.results || [];
           console.log(
-            `Offset ${offset} para ${sellerId}: ${pagedResults.length} publicaciones`
+            `Offset ${offset} para ${sellerId}: ${pagedResults.length} ítems`
           );
           const mappedResults = pagedResults.map((item) => ({
             ...item,
@@ -144,15 +145,16 @@ const Publicaciones = () => {
           offset += limit;
         }
       } catch (error) {
-        console.error("Error en la cuenta", sellerId, error);
+        console.error("Error consultando ítems para el vendedor", sellerId, error);
       }
     }
-    console.log("Total publicaciones obtenidas:", allPublicaciones.length);
+    console.log("Total ítems obtenidos:", allPublicaciones.length);
     await savePublicacionesToDB(allPublicaciones);
     await loadPublicacionesFromDB();
     setLoading(false);
   };
 
+  // Manejo de filtros en la UI
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
@@ -183,7 +185,7 @@ const Publicaciones = () => {
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Publicaciones de Usuarios Activos</h1>
+      <h1 style={styles.title}>Ítems con Envío Gratis (Vendedor)</h1>
       <button onClick={fetchPublicaciones} style={styles.fetchButton}>
         Traer Publicaciones (Nuevos)
       </button>
@@ -199,7 +201,7 @@ const Publicaciones = () => {
         <input
           type="text"
           name="account"
-          placeholder="Buscar por nombre de cuenta"
+          placeholder="Buscar por cuenta"
           value={filters.account}
           onChange={handleFilterChange}
           style={styles.filterInput}
@@ -207,14 +209,14 @@ const Publicaciones = () => {
         <input
           type="text"
           name="publicationId"
-          placeholder="Buscar por ID de publicación"
+          placeholder="Buscar por ID"
           value={filters.publicationId}
           onChange={handleFilterChange}
           style={styles.filterInput}
         />
       </div>
       {loading ? (
-        <p>Cargando publicaciones...</p>
+        <p>Cargando ítems...</p>
       ) : (
         <>
           <table style={styles.table}>
@@ -224,7 +226,7 @@ const Publicaciones = () => {
                 <th style={styles.th}>Título</th>
                 <th style={styles.th}>Precio</th>
                 <th style={styles.th}>Estado</th>
-                <th style={styles.th}>ID Publicación</th>
+                <th style={styles.th}>ID Ítem</th>
                 <th style={styles.th}>Cuenta</th>
               </tr>
             </thead>
@@ -233,7 +235,11 @@ const Publicaciones = () => {
                 <tr key={pub.id}>
                   <td style={styles.td}>
                     {pub.pictures && pub.pictures.length > 0 ? (
-                      <img src={pub.pictures[0].url} alt={pub.title} style={{ width: "50px" }} />
+                      <img
+                        src={pub.pictures[0].url}
+                        alt={pub.title}
+                        style={{ width: "50px" }}
+                      />
                     ) : (
                       "Sin imagen"
                     )}
@@ -248,13 +254,21 @@ const Publicaciones = () => {
             </tbody>
           </table>
           <div style={styles.pagination}>
-            <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} style={styles.pageButton}>
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              style={styles.pageButton}
+            >
               Anterior
             </button>
             <span style={styles.pageInfo}>
               Página {currentPage} de {totalPages}
             </span>
-            <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} style={styles.pageButton}>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              style={styles.pageButton}
+            >
               Siguiente
             </button>
           </div>
