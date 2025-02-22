@@ -1,189 +1,122 @@
 import React, { useState, useEffect } from "react";
+import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
-import {
-  collection,
-  onSnapshot,
-  setDoc,
-  doc,
-  getDocs,
-  query,
-  orderBy,
-} from "firebase/firestore";
-import "./Publicaciones.css"; // Asegúrate de tener estilos definidos aquí
 
 const Publicaciones = () => {
-  const [products, setProducts] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [publications, setPublications] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 50;
+  const [error, setError] = useState("");
 
-  // Escucha en tiempo real las cuentas en Firestore
+  // Escucha en tiempo real las cuentas registradas en Firestore
   useEffect(() => {
-    const unsub = onSnapshot(
+    const unsubscribe = onSnapshot(
       collection(db, "mercadolibreUsers"),
       (snapshot) => {
         if (snapshot?.docs) {
-          const acc = snapshot.docs.map((docSnap) => ({
-            id: docSnap.id,
-            ...docSnap.data(),
+          const accts = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
           }));
-          const validAccounts = acc.filter(
-            (account) => account.token?.access_token
+          // Filtrar cuentas que tengan token válido
+          const validAccounts = accts.filter(
+            (acct) => acct.token?.access_token
           );
           setAccounts(validAccounts);
-          console.log("🔥 Cuentas cargadas desde Firestore:", validAccounts);
         }
       },
-      (error) => {
-        console.error("Error al cargar cuentas:", error);
+      (err) => {
+        console.error("Error al cargar cuentas:", err);
+        setError("Error al cargar cuentas");
       }
     );
-    return () => unsub();
+    return () => unsubscribe();
   }, []);
 
-  // Guarda las publicaciones en Firestore
-  const saveProductsToDB = async (productsArr) => {
-    console.log("📝 Guardando publicaciones en DB:", productsArr);
-    for (const prod of productsArr) {
-      if (!prod.id) {
-        console.warn("⚠️ Ítem sin ID:", prod);
-        continue;
-      }
-      try {
-        await setDoc(
-          doc(db, "userProducts", prod.id.toString()),
-          {
-            ...prod,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
-        console.log(`✅ Ítem ${prod.id} guardado correctamente.`);
-      } catch (error) {
-        console.error("❌ Error al guardar ítem en DB:", prod.id, error);
-      }
-    }
-  };
-
-  // Carga las publicaciones guardadas desde Firestore
-  const loadProductsFromDB = async () => {
-    try {
-      const q = query(
-        collection(db, "userProducts"),
-        orderBy("updatedAt", "desc")
-      );
-      const querySnapshot = await getDocs(q);
-      const prods = querySnapshot.docs.map((docSnap) => docSnap.data());
-      console.log("📂 Publicaciones cargadas desde Firestore:", prods);
-      setProducts(prods);
-      setCurrentPage(1);
-    } catch (error) {
-      console.error("❌ Error al cargar publicaciones desde Firestore:", error);
-    }
-  };
-
-  // Consulta la API de MercadoLibre para obtener solo las publicaciones activas
-  const fetchUserProducts = async () => {
+  // Función para obtener publicaciones activas de cada cuenta
+  const fetchPublications = async () => {
     setLoading(true);
-    let allProducts = [];
-    const limit = 50;
-    // Se solicita únicamente publicaciones activas
-    const additionalParams = "&status=active";
+    setError("");
+    let allPublications = [];
 
-    console.log(`🚀 Cargando publicaciones activas para ${accounts.length} cuentas...`);
     if (accounts.length === 0) {
-      console.warn("⚠️ No hay cuentas con tokens válidos.");
+      setError("No se encontraron cuentas con token válido.");
       setLoading(false);
       return;
     }
-    
+
     for (const account of accounts) {
       const userId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
-      if (!userId || !accessToken) {
-        console.warn("⚠️ Cuenta sin userId o token válido:", account);
-        continue;
-      }
-      try {
-        console.log(`🔍 Consultando publicaciones para el usuario ${userId}`);
-        let offset = 0;
-        let total = 1;
-        while (offset < total) {
-          const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}${additionalParams}`;
-          console.log("🌐 URL de consulta:", url);
-          
-          const response = await fetch(url, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error(`❌ Error ${response.status} en la petición:`, errorData);
-            break;
-          }
-          
-          const data = await response.json();
-          console.log(`🟢 Respuesta de la API para ${userId}:`, data);
-          if (offset === 0) total = data.paging?.total || 0;
-          
-          if (!Array.isArray(data.results) || data.results.length === 0) {
-            console.warn(`⚠️ No se obtuvieron publicaciones para el usuario ${userId}`);
-            break;
-          }
+      if (!userId || !accessToken) continue;
 
-          // Se asume que cada item es un objeto con las propiedades "id" y "title"
+      try {
+        const response = await fetch(
+          `https://api.mercadolibre.com/users/${userId}/items/search?status=active`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+        if (!response.ok) {
+          const errData = await response.json();
+          console.error(`Error en cuenta ${userId}:`, errData);
+          continue;
+        }
+        const data = await response.json();
+        if (Array.isArray(data.results)) {
+          // Extraer propiedades relevantes
           const mapped = data.results.map((item) => ({
             id: item.id,
             title: item.title,
             accountName: account.profile?.nickname || "Sin Nombre",
           }));
-          
-          allProducts = allProducts.concat(mapped);
-          offset += limit;
+          allPublications = allPublications.concat(mapped);
         }
-      } catch (error) {
-        console.error("❌ Error al consultar la API de MercadoLibre:", error);
+      } catch (fetchError) {
+        console.error(`Error al obtener publicaciones para ${userId}:`, fetchError);
       }
     }
-    console.log("📊 Total de publicaciones obtenidas antes de guardar:", allProducts);
-    await saveProductsToDB(allProducts);
-    await loadProductsFromDB();
+    setPublications(allPublications);
     setLoading(false);
   };
-
-  useEffect(() => {
-    console.log("📢 Productos en el estado actual:", products);
-  }, [products]);
 
   return (
     <div className="container my-4">
       <h1 className="text-center mb-4">Publicaciones Activas</h1>
-      <div className="d-flex justify-content-center mb-3">
-        <button 
-          onClick={fetchUserProducts} 
+      <div className="text-center mb-3">
+        <button
+          onClick={fetchPublications}
           disabled={loading}
           className="btn btn-primary"
         >
-          {loading ? "Cargando..." : "Traer Publicaciones"}
+          {loading ? "Cargando..." : "Cargar Publicaciones"}
         </button>
       </div>
+      {error && (
+        <div className="alert alert-danger text-center" role="alert">
+          {error}
+        </div>
+      )}
       <div className="card shadow">
         <div className="card-body">
-          {products.length === 0 ? (
-            <p className="text-center text-warning">⚠️ No hay publicaciones para mostrar</p>
+          {publications.length === 0 ? (
+            <p className="text-center text-warning">No hay publicaciones para mostrar.</p>
           ) : (
             <>
               <p className="text-center">
-                Total de publicaciones: <strong>{products.length}</strong>
+                Total de publicaciones: <strong>{publications.length}</strong>
               </p>
               <ul className="list-group">
-                {products.map((prod) => (
-                  <li key={prod.id} className="list-group-item d-flex justify-content-between align-items-center">
-                    <span>
-                      <strong>{prod.title}</strong> <br />
-                      <small>ID: {prod.id}</small>
-                    </span>
-                    <span className="badge bg-secondary">{prod.accountName}</span>
+                {publications.map((pub) => (
+                  <li
+                    key={pub.id}
+                    className="list-group-item d-flex justify-content-between align-items-center"
+                  >
+                    <div>
+                      <strong>{pub.title}</strong> <br />
+                      <small>ID: {pub.id}</small>
+                    </div>
+                    <span className="badge bg-secondary">{pub.accountName}</span>
                   </li>
                 ))}
               </ul>
