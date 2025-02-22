@@ -11,140 +11,173 @@ import {
 } from "firebase/firestore";
 
 const Publicaciones = () => {
-  const [products, setProducts] = useState([]); // Publicaciones (todos los ítems)
+  const [publicaciones, setPublicaciones] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({
-    title: "",
-    family: "",
-    productId: "",
+    titulo: "",
+    account: "",
+    publicationId: "",
   });
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50; // 50 ítems por página
 
-  // Escucha las cuentas conectadas en Firestore (colección mercadolibreUsers)
+  // Estados que se consultarán (según la documentación de MercadoLibre)
+  const estados = [
+    "active",
+    "pending",
+    "not_yet_active",
+    "programmed",
+    "paused",
+    "closed",
+  ];
+
+  // Escucha la colección de mercadolibreUsers en Firestore
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
-      if (snapshot && snapshot.docs) {
-        const acc = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        }));
-        // Filtramos cuentas con token válido
-        const validAccounts = acc.filter((account) => account.token?.access_token);
-        setAccounts(validAccounts);
+    const unsub = onSnapshot(
+      collection(db, "mercadolibreUsers"),
+      (snapshot) => {
+        if (snapshot && snapshot.docs) {
+          const acc = snapshot.docs.map((docSnap) => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          }));
+          console.log("Cuentas obtenidas:", acc.length);
+          // Solo usamos las cuentas con token válido
+          const activeAccounts = acc.filter(
+            (account) => account.token?.access_token
+          );
+          console.log("Cuentas activas:", activeAccounts.length);
+          setAccounts(activeAccounts);
+        }
       }
-    });
+    );
     return () => unsub();
   }, []);
 
-  // Guarda o actualiza las publicaciones en Firestore (colección userProducts)
-  const saveProductsToDB = async (productsArr) => {
-    console.log("Guardando publicaciones en DB:", productsArr.length);
-    for (const prod of productsArr) {
-      if (!prod.id) {
-        console.warn("Ítem sin ID:", prod);
+  // Función para guardar o actualizar ítems en Firestore
+  const savePublicacionesToDB = async (publicacionesArr) => {
+    console.log("Guardando publicaciones en DB:", publicacionesArr.length);
+    for (const pub of publicacionesArr) {
+      if (!pub.id) {
+        console.warn("Ítem sin ID:", pub);
         continue;
       }
       try {
         await setDoc(
-          doc(db, "userProducts", prod.id.toString()),
+          doc(db, "publicaciones", pub.id.toString()),
           {
-            ...prod,
+            ...pub,
             updatedAt: new Date().toISOString(),
           },
           { merge: true }
         );
-        console.log(`Ítem ${prod.id} guardado correctamente.`);
+        console.log(`Ítem ${pub.id} guardado correctamente.`);
       } catch (error) {
-        console.error("Error al guardar ítem en DB:", prod.id, error);
+        console.error("Error al guardar ítem en DB:", pub.id, error);
       }
     }
   };
 
-  // Carga las publicaciones guardadas en Firestore
-  const loadProductsFromDB = async () => {
+  // Función para cargar los ítems desde Firestore
+  const loadPublicacionesFromDB = async () => {
     try {
-      const q = query(collection(db, "userProducts"), orderBy("updatedAt", "desc"));
+      const q = query(
+        collection(db, "publicaciones"),
+        orderBy("updatedAt", "desc")
+      );
       const querySnapshot = await getDocs(q);
-      const prods = querySnapshot.docs.map((docSnap) => docSnap.data());
-      console.log("Publicaciones cargadas desde DB:", prods.length);
-      setProducts(prods);
+      const pubs = querySnapshot.docs.map((docSnap) => docSnap.data());
+      console.log("Ítems cargados desde DB:", pubs.length);
+      setPublicaciones(pubs);
       setCurrentPage(1);
     } catch (error) {
-      console.error("Error al cargar publicaciones desde DB", error);
+      console.error("Error al cargar ítems desde DB", error);
     }
   };
 
-  // Función para obtener las publicaciones utilizando el endpoint de User Products
-  // Se consulta /users/$USER_ID/items/search con include_filters=true, search_type=scan y status=all.
-  // Se eliminó el filtrado por family_name para traer TODOS los ítems, sin importar el status.
-  const fetchUserProducts = async () => {
+  // Función para obtener ítems usando el endpoint /users/$USER_ID/items/search para cada estado
+  const fetchPublicaciones = async () => {
     setLoading(true);
-    let allProducts = [];
+    let allPublicaciones = [];
     const limit = 50; // límite máximo permitido por la API
-    // Parámetros adicionales para incluir filtros, escanear más de 1000 registros y traer todos los status
-    const additionalParams = "&include_filters=true&search_type=scan&status=all";
 
     for (const account of accounts) {
-      // Se utiliza el ID de perfil o el ID de la cuenta
+      // Usamos el ID de perfil o el ID de la cuenta
       const userId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
       if (!userId || !accessToken) {
         console.warn("Cuenta sin userId o token:", account);
         continue;
       }
-      try {
-        console.log(`Consultando publicaciones para el usuario ${userId}`);
-        let offset = 0;
-        // Primera llamada para conocer el total de ítems publicados
-        const firstResponse = await fetch(
-          `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}${additionalParams}`,
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }
-        );
-        if (!firstResponse.ok) {
-          console.error(
-            `Error al obtener publicaciones para el usuario ${userId}: ${firstResponse.status}`
+
+      // Para cada estado definido, consultamos las publicaciones
+      for (const estado of estados) {
+        try {
+          console.log(
+            `Consultando ítems para el usuario ${userId} con estado: ${estado}`
           );
-          continue;
-        }
-        const firstData = await firstResponse.json();
-        const total = firstData.paging?.total || 0;
-        console.log(`Usuario ${userId}: total ítems: ${total}`);
-        while (offset < total) {
-          const response = await fetch(
-            `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}${additionalParams}`,
+          // Consulta inicial para obtener el total de ítems en ese estado
+          const firstResponse = await fetch(
+            `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=0&status=${estado}`,
             {
               headers: { Authorization: `Bearer ${accessToken}` },
             }
           );
-          if (!response.ok) {
+          if (!firstResponse.ok) {
             console.error(
-              `Error (offset ${offset}) para el usuario ${userId}: ${response.status}`
+              `Error al obtener ítems para ${userId} con estado ${estado}: ${firstResponse.status}`
             );
-            break;
+            continue;
           }
-          const data = await response.json();
-          let results = data.results || [];
-          // Se elimina el filtrado por family_name para incluir todos los ítems
-          // results = results.filter((item) => item.family_name != null);
-          // Agregamos información adicional, como el nombre de la cuenta
-          const mapped = results.map((item) => ({
-            ...item,
-            accountName: account.profile?.nickname || "Sin Nombre",
-          }));
-          allProducts = allProducts.concat(mapped);
-          offset += limit;
+          const firstData = await firstResponse.json();
+          const total = firstData.paging?.total || 0;
+          console.log(`Usuario ${userId} - Estado ${estado}: Total ítems: ${total}`);
+          let offset = 0;
+          if (total === 0) {
+            console.warn(`No se encontraron ítems para ${userId} con estado ${estado}`);
+          }
+          while (offset < total) {
+            const pagedResponse = await fetch(
+              `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}&status=${estado}`,
+              {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              }
+            );
+            if (!pagedResponse.ok) {
+              console.error(
+                `Error (offset ${offset}) para ${userId} con estado ${estado}: ${pagedResponse.status}`
+              );
+              break;
+            }
+            const pagedData = await pagedResponse.json();
+            const pagedResults = pagedData.results || [];
+            console.log(
+              `Usuario ${userId} - Estado ${estado}: Offset ${offset}: ${pagedResults.length} ítems`
+            );
+            // Agregamos información adicional a cada ítem (por ejemplo, el estado y el nombre de la cuenta)
+            const mappedResults = pagedResults.map((item) => ({
+              ...item,
+              estado: estado,
+              accountName: account.profile?.nickname || "Sin Nombre",
+            }));
+            allPublicaciones = allPublicaciones.concat(mappedResults);
+            offset += limit;
+          }
+        } catch (error) {
+          console.error(
+            "Error consultando ítems para el usuario",
+            userId,
+            "con estado",
+            estado,
+            error
+          );
         }
-      } catch (error) {
-        console.error("Error consultando publicaciones para el usuario", userId, error);
       }
     }
-    console.log("Total de publicaciones obtenidas:", allProducts.length);
-    await saveProductsToDB(allProducts);
-    await loadProductsFromDB();
+    console.log("Total ítems obtenidos:", allPublicaciones.length);
+    await savePublicacionesToDB(allPublicaciones);
+    await loadPublicacionesFromDB();
     setLoading(false);
   };
 
@@ -155,19 +188,19 @@ const Publicaciones = () => {
     setCurrentPage(1);
   };
 
-  const filteredProducts = products.filter((prod) => {
-    const matchesTitle = prod.title
+  const filteredPublicaciones = publicaciones.filter((pub) => {
+    const matchesTitulo = pub.title
       ?.toLowerCase()
-      .includes(filters.title.toLowerCase());
-    const matchesFamily = prod.family_name
+      .includes(filters.titulo.toLowerCase());
+    const matchesAccount = pub.accountName
       ?.toLowerCase()
-      .includes(filters.family.toLowerCase());
-    const matchesId = prod.id?.toString().includes(filters.productId);
-    return matchesTitle && matchesFamily && matchesId;
+      .includes(filters.account.toLowerCase());
+    const matchesId = pub.id?.toString().includes(filters.publicationId);
+    return matchesTitulo && matchesAccount && matchesId;
   });
 
-  const totalPages = Math.ceil(filteredProducts.length / pageSize);
-  const paginatedProducts = filteredProducts.slice(
+  const totalPages = Math.ceil(filteredPublicaciones.length / pageSize);
+  const paginatedPublicaciones = filteredPublicaciones.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
@@ -179,40 +212,38 @@ const Publicaciones = () => {
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>
-        Publicaciones (Todos los ítems de MercadoLibre sin importar su status)
-      </h1>
-      <button onClick={fetchUserProducts} style={styles.fetchButton}>
-        Traer Publicaciones (Todos)
+      <h1 style={styles.title}>Publicaciones Completas (Todos los estados)</h1>
+      <button onClick={fetchPublicaciones} style={styles.fetchButton}>
+        Traer Publicaciones (Nuevos)
       </button>
       <div style={styles.filterContainer}>
         <input
           type="text"
-          name="title"
+          name="titulo"
           placeholder="Buscar por título"
-          value={filters.title}
+          value={filters.titulo}
           onChange={handleFilterChange}
           style={styles.filterInput}
         />
         <input
           type="text"
-          name="family"
-          placeholder="Buscar por Family Name"
-          value={filters.family}
+          name="account"
+          placeholder="Buscar por cuenta"
+          value={filters.account}
           onChange={handleFilterChange}
           style={styles.filterInput}
         />
         <input
           type="text"
-          name="productId"
+          name="publicationId"
           placeholder="Buscar por ID"
-          value={filters.productId}
+          value={filters.publicationId}
           onChange={handleFilterChange}
           style={styles.filterInput}
         />
       </div>
       {loading ? (
-        <p>Cargando publicaciones...</p>
+        <p>Cargando ítems...</p>
       ) : (
         <>
           <table style={styles.table}>
@@ -221,30 +252,30 @@ const Publicaciones = () => {
                 <th style={styles.th}>Imagen</th>
                 <th style={styles.th}>Título</th>
                 <th style={styles.th}>Precio</th>
-                <th style={styles.th}>Family Name</th>
+                <th style={styles.th}>Estado</th>
                 <th style={styles.th}>ID Ítem</th>
                 <th style={styles.th}>Cuenta</th>
               </tr>
             </thead>
             <tbody>
-              {paginatedProducts.map((prod) => (
-                <tr key={prod.id}>
+              {paginatedPublicaciones.map((pub) => (
+                <tr key={pub.id}>
                   <td style={styles.td}>
-                    {prod.pictures && prod.pictures.length > 0 ? (
+                    {pub.pictures && pub.pictures.length > 0 ? (
                       <img
-                        src={prod.pictures[0].url}
-                        alt={prod.title}
+                        src={pub.pictures[0].url}
+                        alt={pub.title}
                         style={{ width: "50px" }}
                       />
                     ) : (
                       "Sin imagen"
                     )}
                   </td>
-                  <td style={styles.td}>{prod.title}</td>
-                  <td style={styles.td}>{prod.price}</td>
-                  <td style={styles.td}>{prod.family_name}</td>
-                  <td style={styles.td}>{prod.id}</td>
-                  <td style={styles.td}>{prod.accountName}</td>
+                  <td style={styles.td}>{pub.title}</td>
+                  <td style={styles.td}>{pub.price}</td>
+                  <td style={styles.td}>{pub.estado}</td>
+                  <td style={styles.td}>{pub.id}</td>
+                  <td style={styles.td}>{pub.accountName}</td>
                 </tr>
               ))}
             </tbody>
