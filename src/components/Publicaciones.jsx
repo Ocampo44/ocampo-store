@@ -7,9 +7,9 @@ const Publicaciones = () => {
   const [accounts, setAccounts] = useState([]);
   // Estructura: { [sellerId]: { items: [...], currentPage: 1, totalPages: N } }
   const [publicaciones, setPublicaciones] = useState({});
-  const SITE_ID = "MLM"; // Cambia según la región (MLM para México, MLA para Argentina, etc.)
+  const SITE_ID = "MLM"; // Asegúrate de que este SITE_ID corresponda con la región de los vendedores.
 
-  // Escucha en tiempo real las cuentas conectadas en Firestore
+  // Escucha las cuentas conectadas en Firestore
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const acc = snapshot.docs.map((docSnap) => ({
@@ -21,15 +21,15 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para traer todas las publicaciones de un vendedor utilizando 50 ítems por consulta
+  // Función para traer todas las publicaciones de un vendedor usando 50 ítems por consulta
   const fetchPublicacionesForSeller = async (sellerId) => {
     const items = [];
     let offset = 0;
-    const limit = 50; // Máximo permitido para usuarios públicos
+    const limit = 50; // Límite máximo permitido para usuarios públicos
     let total = 0;
     try {
       do {
-        // Se construye la URL asegurándose de usar limit=50
+        // Se construye la URL usando limit=50
         const url = `https://api.mercadolibre.com/sites/${SITE_ID}/search?seller_id=${sellerId}&limit=${limit}&offset=${offset}`;
         const response = await fetch(url);
         const data = await response.json();
@@ -62,7 +62,7 @@ const Publicaciones = () => {
         const sellerId = account.profile?.id;
         if (sellerId) {
           const items = await fetchPublicacionesForSeller(sellerId);
-          // Se calcula el total de páginas (50 ítems por página)
+          // Se calcula el total de páginas para la UI (50 ítems por página)
           const totalPages = Math.ceil(items.length / 50);
           pubs[sellerId] = {
             items,
@@ -79,7 +79,7 @@ const Publicaciones = () => {
     }
   }, [accounts]);
 
-  // Función para cambiar de página en la interfaz para cada vendedor
+  // Función para manejar el cambio de página en la interfaz para cada vendedor
   const handlePageChange = (sellerId, newPage) => {
     setPublicaciones((prev) => ({
       ...prev,
