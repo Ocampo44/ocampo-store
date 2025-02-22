@@ -4,10 +4,9 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
 const Publicaciones = () => {
+  const [publicaciones, setPublicaciones] = useState([]);
   const [accounts, setAccounts] = useState([]);
-  // Estructura: { [sellerId]: { items: [...], currentPage: 1, totalPages: N } }
-  const [publicaciones, setPublicaciones] = useState({});
-  const SITE_ID = "MLM"; // Asegúrate de que este SITE_ID corresponda con la región de los vendedores.
+  const SITE_ID = "MLM"; // Ajusta según corresponda
 
   // Escucha las cuentas conectadas en Firestore
   useEffect(() => {
@@ -21,146 +20,82 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para traer todas las publicaciones de un vendedor usando 50 ítems por consulta
-  const fetchPublicacionesForSeller = async (sellerId) => {
-    const items = [];
-    let offset = 0;
-    const limit = 50; // Límite máximo permitido para usuarios públicos
-    let total = 0;
-    try {
-      do {
-        // Se construye la URL usando limit=50
-        const url = `https://api.mercadolibre.com/sites/${SITE_ID}/search?seller_id=${sellerId}&limit=${limit}&offset=${offset}`;
-        const response = await fetch(url);
-        const data = await response.json();
-        console.log("Respuesta para vendedor", sellerId, data);
-        if (!response.ok) {
-          console.error(
-            `Error al obtener publicaciones para el vendedor ${sellerId}: ${response.status}`,
-            data
-          );
-          break;
-        }
-        items.push(...data.results);
-        total = data.paging.total;
-        offset += limit;
-      } while (offset < total);
-    } catch (error) {
-      console.error(
-        `Error en la consulta de publicaciones para el vendedor ${sellerId}:`,
-        error
-      );
-    }
-    return items;
-  };
-
-  // Para cada cuenta conectada, se consultan y se guardan todas las publicaciones
+  // Por cada cuenta, se consulta las publicaciones usando el endpoint de MercadoLibre
   useEffect(() => {
-    const fetchAllPublicaciones = async () => {
-      const pubs = {};
+    const fetchPublicaciones = async () => {
+      const allPublicaciones = [];
+
       for (const account of accounts) {
+        const accessToken = account.token?.access_token;
         const sellerId = account.profile?.id;
-        if (sellerId) {
-          const items = await fetchPublicacionesForSeller(sellerId);
-          // Se calcula el total de páginas para la UI (50 ítems por página)
-          const totalPages = Math.ceil(items.length / 50);
-          pubs[sellerId] = {
-            items,
-            currentPage: 1,
-            totalPages,
-          };
+        if (accessToken && sellerId) {
+          try {
+            const response = await fetch(
+              `https://api.mercadolibre.com/sites/${SITE_ID}/search?seller_id=${sellerId}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                },
+              }
+            );
+            if (response.ok) {
+              const data = await response.json();
+              allPublicaciones.push({ sellerId, items: data.results });
+            } else {
+              console.error(
+                `Error al obtener publicaciones para el vendedor ${sellerId}: ${response.status}`
+              );
+            }
+          } catch (error) {
+            console.error(
+              `Error al consultar publicaciones para el vendedor ${sellerId}:`,
+              error
+            );
+          }
         }
       }
-      setPublicaciones(pubs);
+      setPublicaciones(allPublicaciones);
     };
 
     if (accounts.length > 0) {
-      fetchAllPublicaciones();
+      fetchPublicaciones();
     }
   }, [accounts]);
-
-  // Función para manejar el cambio de página en la interfaz para cada vendedor
-  const handlePageChange = (sellerId, newPage) => {
-    setPublicaciones((prev) => ({
-      ...prev,
-      [sellerId]: {
-        ...prev[sellerId],
-        currentPage: newPage,
-      },
-    }));
-  };
 
   return (
     <div style={{ padding: "20px" }}>
       <h1>Publicaciones de Cuentas Conectadas</h1>
-      {Object.keys(publicaciones).length === 0 && (
-        <p>No se encontraron publicaciones.</p>
-      )}
-      {Object.entries(publicaciones).map(([sellerId, pubData]) => {
-        const { items, currentPage, totalPages } = pubData;
-        // Se calcula el slice para mostrar 50 ítems por página
-        const startIndex = (currentPage - 1) * 50;
-        const endIndex = startIndex + 50;
-        const itemsToShow = items.slice(startIndex, endIndex);
-
-        return (
-          <div key={sellerId} style={{ marginBottom: "40px" }}>
-            <h2>Vendedor: {sellerId}</h2>
-            {itemsToShow.length === 0 ? (
-              <p>No hay publicaciones para este vendedor.</p>
-            ) : (
-              itemsToShow.map((item) => (
-                <div
-                  key={item.id}
-                  style={{
-                    border: "1px solid #ddd",
-                    padding: "10px",
-                    marginBottom: "10px",
-                    borderRadius: "4px",
-                  }}
-                >
-                  <h3>{item.title}</h3>
-                  {item.thumbnail && (
-                    <img
-                      src={item.thumbnail}
-                      alt={item.title}
-                      style={{ maxWidth: "150px" }}
-                    />
-                  )}
-                  <p>Precio: ${item.price}</p>
-                </div>
-              ))
-            )}
-            {/* Controles de paginación */}
-            {totalPages > 1 && (
-              <div style={{ marginTop: "10px" }}>
-                <button
-                  onClick={() =>
-                    handlePageChange(sellerId, Math.max(currentPage - 1, 1))
-                  }
-                  disabled={currentPage === 1}
-                >
-                  Anterior
-                </button>
-                <span style={{ margin: "0 10px" }}>
-                  Página {currentPage} de {totalPages}
-                </span>
-                <button
-                  onClick={() =>
-                    handlePageChange(
-                      sellerId,
-                      Math.min(currentPage + 1, totalPages)
-                    )
-                  }
-                  disabled={currentPage === totalPages}
-                >
-                  Siguiente
-                </button>
+      {publicaciones.length === 0 && <p>No se encontraron publicaciones.</p>}
+      {publicaciones.map((pub) => (
+        <div key={pub.sellerId} style={{ marginBottom: "20px" }}>
+          <h2>Vendedor: {pub.sellerId}</h2>
+          {pub.items.length === 0 ? (
+            <p>No hay publicaciones para este vendedor.</p>
+          ) : (
+            pub.items.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  border: "1px solid #ddd",
+                  padding: "10px",
+                  marginBottom: "10px",
+                  borderRadius: "4px",
+                }}
+              >
+                <h3>{item.title}</h3>
+                {item.thumbnail && (
+                  <img
+                    src={item.thumbnail}
+                    alt={item.title}
+                    style={{ maxWidth: "150px" }}
+                  />
+                )}
+                <p>Precio: ${item.price}</p>
               </div>
-            )}
-          </div>
-        );
-      })}
+            ))
+          )}
+        </div>
+      ))}
     </div>
   );
 };
