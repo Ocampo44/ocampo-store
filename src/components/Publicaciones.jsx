@@ -1,3 +1,4 @@
+// src/components/Publicaciones.jsx
 import React, { useEffect, useState } from "react";
 
 const Publicaciones = () => {
@@ -5,43 +6,42 @@ const Publicaciones = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Suponiendo que ya tienes almacenado el access token y el user ID (por ejemplo, en Firestore o en localStorage)
+  // Asegúrate de tener el token y el user ID. 
+  // Puedes obtenerlos de localStorage o de tu estado global, según corresponda.
   const accessToken = localStorage.getItem("mercadoLibreAccessToken");
   const userId = localStorage.getItem("mercadoLibreUserId");
 
-  const fetchPublicaciones = async () => {
-    try {
-      // Agregamos el parámetro orders=start_time_desc para ordenar según lo requerido
-      const url = `https://api.mercadolibre.com/users/${userId}/items/search?orders=start_time_desc`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error(`Error en la respuesta: ${response.status}`);
-      }
-      const data = await response.json();
-      // data.results contendrá los IDs de las publicaciones
-      setPublicaciones(data.results);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (accessToken && userId) {
-      fetchPublicaciones();
-    } else {
-      setError("No se encontró la información de autenticación.");
-      setLoading(false);
-    }
+    const fetchPublicaciones = async () => {
+      if (!accessToken || !userId) {
+        setError("No se encontró el token o el ID de usuario.");
+        setLoading(false);
+        return;
+      }
+      try {
+        const url = `https://api.mercadolibre.com/users/${userId}/items/search?orders=start_time_desc`;
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!response.ok) {
+          throw new Error(`Error en la respuesta: ${response.status}`);
+        }
+        const data = await response.json();
+        // data.results debe contener los IDs de las publicaciones
+        setPublicaciones(data.results || []);
+      } catch (err) {
+        console.error("Error al obtener publicaciones:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPublicaciones();
   }, [accessToken, userId]);
 
-  if (loading) return <p>Cargando publicaciones...</p>;
-  if (error) return <p>Error: {error}</p>;
+  if (loading) return <div>Cargando publicaciones...</div>;
+  if (error) return <div>Error: {error}</div>;
 
   return (
     <div>
