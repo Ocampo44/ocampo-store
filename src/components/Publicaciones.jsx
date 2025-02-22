@@ -22,23 +22,36 @@ const Publicaciones = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50; // 50 ítems por página
 
+  // Estados que se consultarán (según la documentación de MercadoLibre)
+  const estados = [
+    "active",
+    "pending",
+    "not_yet_active",
+    "programmed",
+    "paused",
+    "closed",
+  ];
+
   // Escucha la colección de mercadolibreUsers en Firestore
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
-      if (snapshot && snapshot.docs) {
-        const acc = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        }));
-        console.log("Cuentas obtenidas:", acc.length);
-        // Solo usamos las cuentas con token válido
-        const activeAccounts = acc.filter(
-          (account) => account.token?.access_token
-        );
-        console.log("Cuentas activas:", activeAccounts.length);
-        setAccounts(activeAccounts);
+    const unsub = onSnapshot(
+      collection(db, "mercadolibreUsers"),
+      (snapshot) => {
+        if (snapshot && snapshot.docs) {
+          const acc = snapshot.docs.map((docSnap) => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          }));
+          console.log("Cuentas obtenidas:", acc.length);
+          // Solo usamos las cuentas con token válido
+          const activeAccounts = acc.filter(
+            (account) => account.token?.access_token
+          );
+          console.log("Cuentas activas:", activeAccounts.length);
+          setAccounts(activeAccounts);
+        }
       }
-    });
+    );
     return () => unsub();
   }, []);
 
@@ -83,11 +96,12 @@ const Publicaciones = () => {
     }
   };
 
-  // Función para obtener ítems usando el endpoint /users/$USER_ID/items/search
+  // Función para obtener ítems usando el endpoint /users/$USER_ID/items/search para cada estado
   const fetchPublicaciones = async () => {
     setLoading(true);
     let allPublicaciones = [];
     const limit = 50; // límite máximo permitido por la API
+
     for (const account of accounts) {
       // Usamos el ID de perfil o el ID de la cuenta
       const userId = account.profile?.id || account.id;
@@ -96,56 +110,69 @@ const Publicaciones = () => {
         console.warn("Cuenta sin userId o token:", account);
         continue;
       }
-      try {
-        console.log(`Consultando ítems para el usuario ${userId}`);
-        // Consulta inicial para obtener el total
-        const firstResponse = await fetch(
-          `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=0`,
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }
-        );
-        if (!firstResponse.ok) {
-          console.error(
-            `Error al obtener ítems para ${userId}: ${firstResponse.status}`
+
+      // Para cada estado definido, consultamos las publicaciones
+      for (const estado of estados) {
+        try {
+          console.log(
+            `Consultando ítems para el usuario ${userId} con estado: ${estado}`
           );
-          continue;
-        }
-        const firstData = await firstResponse.json();
-        const total = firstData.paging?.total || 0;
-        console.log(`Usuario ${userId} - Total ítems: ${total}`);
-        let offset = 0;
-        if (total === 0) {
-          console.warn(`No se encontraron ítems para ${userId}`);
-        }
-        while (offset < total) {
-          const pagedResponse = await fetch(
-            `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}`,
+          // Consulta inicial para obtener el total de ítems en ese estado
+          const firstResponse = await fetch(
+            `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=0&status=${estado}`,
             {
               headers: { Authorization: `Bearer ${accessToken}` },
             }
           );
-          if (!pagedResponse.ok) {
+          if (!firstResponse.ok) {
             console.error(
-              `Error (offset ${offset}) para ${userId}: ${pagedResponse.status}`
+              `Error al obtener ítems para ${userId} con estado ${estado}: ${firstResponse.status}`
             );
-            break;
+            continue;
           }
-          const pagedData = await pagedResponse.json();
-          const pagedResults = pagedData.results || [];
-          console.log(
-            `Offset ${offset} para ${userId}: ${pagedResults.length} ítems`
+          const firstData = await firstResponse.json();
+          const total = firstData.paging?.total || 0;
+          console.log(`Usuario ${userId} - Estado ${estado}: Total ítems: ${total}`);
+          let offset = 0;
+          if (total === 0) {
+            console.warn(`No se encontraron ítems para ${userId} con estado ${estado}`);
+          }
+          while (offset < total) {
+            const pagedResponse = await fetch(
+              `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}&status=${estado}`,
+              {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              }
+            );
+            if (!pagedResponse.ok) {
+              console.error(
+                `Error (offset ${offset}) para ${userId} con estado ${estado}: ${pagedResponse.status}`
+              );
+              break;
+            }
+            const pagedData = await pagedResponse.json();
+            const pagedResults = pagedData.results || [];
+            console.log(
+              `Usuario ${userId} - Estado ${estado}: Offset ${offset}: ${pagedResults.length} ítems`
+            );
+            // Agregamos información adicional a cada ítem (por ejemplo, el estado y el nombre de la cuenta)
+            const mappedResults = pagedResults.map((item) => ({
+              ...item,
+              estado: estado,
+              accountName: account.profile?.nickname || "Sin Nombre",
+            }));
+            allPublicaciones = allPublicaciones.concat(mappedResults);
+            offset += limit;
+          }
+        } catch (error) {
+          console.error(
+            "Error consultando ítems para el usuario",
+            userId,
+            "con estado",
+            estado,
+            error
           );
-          const mappedResults = pagedResults.map((item) => ({
-            ...item,
-            estado: item.status || "active",
-            accountName: account.profile?.nickname || "Sin Nombre",
-          }));
-          allPublicaciones = allPublicaciones.concat(mappedResults);
-          offset += limit;
         }
-      } catch (error) {
-        console.error("Error consultando ítems para el usuario", userId, error);
       }
     }
     console.log("Total ítems obtenidos:", allPublicaciones.length);
@@ -185,7 +212,7 @@ const Publicaciones = () => {
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Ítems Publicados (Usuario)</h1>
+      <h1 style={styles.title}>Publicaciones Completas (Todos los estados)</h1>
       <button onClick={fetchPublicaciones} style={styles.fetchButton}>
         Traer Publicaciones (Nuevos)
       </button>
