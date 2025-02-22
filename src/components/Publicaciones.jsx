@@ -76,15 +76,15 @@ const Publicaciones = () => {
     }
   };
 
-  // Función para obtener las publicaciones utilizando el endpoint de User Products.
-  // Se consulta /users/$USER_ID/items/search con include_filters=true y search_type=scan.
-  // Se removió el parámetro status=all para evitar problemas.
+  // Función para obtener las publicaciones utilizando el endpoint de User Products
+  // Se consulta /users/$USER_ID/items/search con include_filters=true, search_type=scan y status=all.
+  // Se eliminó el filtrado por family_name para traer TODOS los ítems, sin importar el status.
   const fetchUserProducts = async () => {
     setLoading(true);
     let allProducts = [];
     const limit = 50; // límite máximo permitido por la API
-    // Parámetros adicionales para incluir filtros y escanear más de 1000 registros
-    const additionalParams = "&include_filters=true&search_type=scan";
+    // Parámetros adicionales para incluir filtros, escanear más de 1000 registros y traer todos los status
+    const additionalParams = "&include_filters=true&search_type=scan&status=all";
 
     for (const account of accounts) {
       // Se utiliza el ID de perfil o el ID de la cuenta
@@ -111,7 +111,6 @@ const Publicaciones = () => {
           continue;
         }
         const firstData = await firstResponse.json();
-        console.log("Datos de la primera respuesta:", firstData);
         const total = firstData.paging?.total || 0;
         console.log(`Usuario ${userId}: total ítems: ${total}`);
         while (offset < total) {
@@ -129,7 +128,9 @@ const Publicaciones = () => {
           }
           const data = await response.json();
           let results = data.results || [];
-          // Se omite cualquier filtrado extra para incluir todos los ítems
+          // Se elimina el filtrado por family_name para incluir todos los ítems
+          // results = results.filter((item) => item.family_name != null);
+          // Agregamos información adicional, como el nombre de la cuenta
           const mapped = results.map((item) => ({
             ...item,
             accountName: account.profile?.nickname || "Sin Nombre",
@@ -179,10 +180,10 @@ const Publicaciones = () => {
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>
-        Publicaciones (Intento de traer todos los ítems de MercadoLibre)
+        Publicaciones (Todos los ítems de MercadoLibre sin importar su status)
       </h1>
       <button onClick={fetchUserProducts} style={styles.fetchButton}>
-        Traer Publicaciones
+        Traer Publicaciones (Todos)
       </button>
       <div style={styles.filterContainer}>
         <input
