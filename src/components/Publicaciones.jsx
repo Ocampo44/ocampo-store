@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
-import {
-  collection,
-  onSnapshot,
-  setDoc,
-  doc,
-  getDocs,
-  query,
-  orderBy,
+import { 
+  collection, 
+  onSnapshot, 
+  setDoc, 
+  doc, 
+  getDocs, 
+  query, 
+  orderBy 
 } from "firebase/firestore";
 
 const Publicaciones = () => {
@@ -45,14 +45,9 @@ const Publicaciones = () => {
 
   // Función para guardar o actualizar las publicaciones en Firestore
   const savePublicacionesToDB = async (publicacionesArr) => {
-    console.log("Guardando publicaciones en DB:", publicacionesArr.length);
     for (const pub of publicacionesArr) {
-      if (!pub.id) {
-        console.warn("Publicación sin ID:", pub);
-        continue;
-      }
       try {
-        console.log(`Guardando publicación ${pub.id}...`);
+        // Se usa el id de la publicación como id del documento
         await setDoc(
           doc(db, "publicaciones", pub.id.toString()),
           {
@@ -61,14 +56,13 @@ const Publicaciones = () => {
           },
           { merge: true }
         );
-        console.log(`Publicación ${pub.id} guardada correctamente.`);
       } catch (error) {
         console.error("Error al guardar publicación en DB:", pub.id, error);
       }
     }
   };
 
-  // Función para cargar publicaciones desde Firestore (ordenadas por updatedAt descendente)
+  // Función para cargar publicaciones desde Firestore (ordenadas, por ejemplo, por updatedAt)
   const loadPublicacionesFromDB = async () => {
     try {
       const q = query(
@@ -77,7 +71,6 @@ const Publicaciones = () => {
       );
       const querySnapshot = await getDocs(q);
       const pubs = querySnapshot.docs.map((docSnap) => docSnap.data());
-      console.log("Publicaciones cargadas desde DB:", pubs.length);
       setPublicaciones(pubs);
       setCurrentPage(1);
     } catch (error) {
@@ -91,12 +84,13 @@ const Publicaciones = () => {
     let allPublicaciones = [];
     const limit = 50; // máximo permitido por la API
     for (const account of accounts) {
+      // Usamos el id del perfil si existe o el id de la cuenta
       const sellerId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
       if (!sellerId || !accessToken) continue;
 
       try {
-        // Primer llamado para obtener el total de publicaciones
+        // Usamos el endpoint de usuario para traer todas las publicaciones
         const firstResponse = await fetch(
           `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=0&status=all`,
           {
@@ -133,12 +127,9 @@ const Publicaciones = () => {
           }
           const pagedData = await pagedResponse.json();
           let pagedResults = pagedData.results || [];
-          console.log(
-            `Obtenidas ${pagedResults.length} publicaciones para offset ${offset}`
-          );
           pagedResults = pagedResults.map((item) => ({
             ...item,
-            estado: item.status || "active",
+            estado: item.status || "active", // usa el status que retorna la API o define uno por defecto
             accountName: account.profile?.nickname || "Sin Nombre",
           }));
           allPublicaciones = allPublicaciones.concat(pagedResults);
@@ -152,10 +143,9 @@ const Publicaciones = () => {
         );
       }
     }
-    console.log("Total publicaciones obtenidas:", allPublicaciones.length);
     // Guardar o actualizar en Firestore
     await savePublicacionesToDB(allPublicaciones);
-    // Luego, recargar desde la DB
+    // Luego, recargar desde la DB (esto te permite ver nuevas publicaciones o actualizaciones)
     await loadPublicacionesFromDB();
     setLoading(false);
   };
