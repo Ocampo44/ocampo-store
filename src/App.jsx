@@ -33,7 +33,6 @@ import EditCompraForm from "./components/EditCompraForm";
 
 // Componentes para MercadoLibre
 import MercadoLibreConnections from "./components/MercadoLibreConnections";
-import Publicaciones from "./components/Publicaciones";
 
 function App() {
   const [warehouses, setWarehouses] = useState([]);
@@ -384,7 +383,6 @@ function App() {
               element={<EditCompraForm warehouses={warehouses} productosDisponibles={products} />}
             />
             <Route path="/mercadolibre" element={<MercadoLibreConnections />} />
-            <Route path="/publicaciones" element={<Publicaciones />} />
           </Routes>
         </div>
       </div>
