@@ -31,7 +31,7 @@ const Publicaciones = () => {
         }));
         const validAccounts = acc.filter((account) => account.token?.access_token);
         setAccounts(validAccounts);
-        console.log("Cuentas cargadas:", validAccounts);
+        console.log("Cuentas cargadas desde Firestore:", validAccounts);
       }
     });
     return () => unsub();
@@ -65,11 +65,12 @@ const Publicaciones = () => {
       const q = query(collection(db, "userProducts"), orderBy("updatedAt", "desc"));
       const querySnapshot = await getDocs(q);
       const prods = querySnapshot.docs.map((docSnap) => docSnap.data());
-      console.log("Publicaciones cargadas desde DB:", prods.length);
+      console.log("Publicaciones cargadas desde Firestore:", prods.length);
+      if (prods.length === 0) console.warn("⚠️ No hay publicaciones en Firestore");
       setProducts(prods);
       setCurrentPage(1);
     } catch (error) {
-      console.error("Error al cargar publicaciones desde DB", error);
+      console.error("Error al cargar publicaciones desde Firestore:", error);
     }
   };
 
@@ -79,54 +80,31 @@ const Publicaciones = () => {
     const limit = 50;
     const additionalParams = "&include_filters=true&search_type=scan";
 
+    console.log(`Cargando publicaciones para ${accounts.length} cuentas...`);
     for (const account of accounts) {
       const userId = account.profile?.id || account.id;
       const accessToken = account.token?.access_token;
       if (!userId || !accessToken) {
-        console.warn("Cuenta sin userId o token:", account);
+        console.warn("Cuenta sin userId o token válido:", account);
         continue;
       }
       try {
         console.log(`Consultando publicaciones para el usuario ${userId}`);
-        let offset = 0;
-        const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}${additionalParams}`;
+        const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&include_filters=true&search_type=scan`;
         console.log("URL de consulta:", url);
         
         const firstResponse = await fetch(url, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!firstResponse.ok) {
-          console.error(`Error ${firstResponse.status} al obtener publicaciones de ${userId}`);
+          console.error(`Error ${firstResponse.status} en la petición:`, await firstResponse.json());
           continue;
         }
         
         const firstData = await firstResponse.json();
-        console.log("Datos iniciales obtenidos:", firstData);
-        const total = firstData.paging?.total || 0;
-        console.log(`Usuario ${userId}: total ítems: ${total}`);
-        
-        while (offset < total) {
-          const response = await fetch(
-            `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}${additionalParams}`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-          );
-          if (!response.ok) {
-            console.error(`Error (offset ${offset}) para ${userId}: ${response.status}`);
-            break;
-          }
-          
-          const data = await response.json();
-          const results = data.results || [];
-          const mapped = results.map((item) => ({
-            ...item,
-            accountName: account.profile?.nickname || "Sin Nombre",
-          }));
-          
-          allProducts = allProducts.concat(mapped);
-          offset += limit;
-        }
+        console.log("Primera respuesta de la API:", firstData);
       } catch (error) {
-        console.error("Error consultando publicaciones para", userId, error);
+        console.error("Error al consultar la API de MercadoLibre:", error);
       }
     }
     console.log("Total de publicaciones obtenidas:", allProducts.length);
@@ -146,11 +124,15 @@ const Publicaciones = () => {
       {loading ? (
         <p>Cargando publicaciones...</p>
       ) : (
-        <ul>
-          {products.map((prod) => (
-            <li key={prod.id}>{prod.title}</li>
-          ))}
-        </ul>
+        <>
+          <p>Total de publicaciones en estado: {products.length}</p>
+          {products.length === 0 && <p>⚠️ No hay publicaciones para mostrar</p>}
+          <ul>
+            {products.map((prod) => (
+              <li key={prod.id}>{prod.title} - {prod.id}</li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );
