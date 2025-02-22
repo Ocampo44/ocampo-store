@@ -1,3 +1,4 @@
+// MercadoLibreConnections.js
 import React, { useEffect, useState } from "react";
 import {
   collection,
@@ -8,7 +9,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
-// Función para generar code_verifier y code_challenge (PKCE)
+// Genera code_verifier y code_challenge (PKCE)
 const generateCodeVerifierAndChallenge = async () => {
   const array = new Uint8Array(32);
   window.crypto.getRandomValues(array);
@@ -30,14 +31,14 @@ const generateCodeVerifierAndChallenge = async () => {
   return { codeVerifier, codeChallenge: base64Hash };
 };
 
-// Función para obtener el perfil del usuario desde MercadoLibre
+// Obtiene el perfil del usuario desde MercadoLibre
 const fetchUserProfile = async (accessToken) => {
   try {
     const response = await fetch(
       `https://api.mercadolibre.com/users/me?access_token=${accessToken}`
     );
     if (!response.ok) {
-      console.error("Error en la respuesta al obtener el perfil:", response.status);
+      console.error("Error al obtener el perfil:", response.status);
       return null;
     }
     const data = await response.json();
@@ -48,7 +49,7 @@ const fetchUserProfile = async (accessToken) => {
   }
 };
 
-// Función para validar el token: retorna true si es válido, false en caso contrario.
+// Valida el token
 const checkTokenValidity = async (accessToken) => {
   try {
     const response = await fetch(
@@ -68,7 +69,7 @@ const MercadoLibreConnections = () => {
   const [status, setStatus] = useState("");
   const [tokenStatuses, setTokenStatuses] = useState({});
 
-  // Inicia la autenticación para conectar (o renovar) la cuenta.
+  // Inicia la autenticación para conectar o renovar la cuenta
   const iniciarAutenticacion = async () => {
     try {
       const { codeVerifier, codeChallenge } = await generateCodeVerifierAndChallenge();
@@ -83,13 +84,13 @@ const MercadoLibreConnections = () => {
     }
   };
 
-  // Función para renovar token de una cuenta en particular.
+  // Renueva token de una cuenta en particular
   const renovarToken = (accountId) => {
     localStorage.setItem("renewAccountId", accountId);
     iniciarAutenticacion();
   };
 
-  // Función para eliminar un usuario de Firestore.
+  // Elimina un usuario de Firestore
   const eliminarUsuario = async (accountId) => {
     try {
       await deleteDoc(doc(db, "mercadolibreUsers", accountId));
@@ -100,7 +101,7 @@ const MercadoLibreConnections = () => {
     }
   };
 
-  // Función para intercambiar el código de autorización por el token.
+  // Intercambia el código de autorización por el token
   const exchangeCodeForToken = async (code) => {
     const codeVerifier = localStorage.getItem("code_verifier");
     if (!codeVerifier) {
@@ -136,7 +137,7 @@ const MercadoLibreConnections = () => {
     }
   };
 
-  // Procesa el código en la URL: intercambia por token y guarda/actualiza el usuario.
+  // Procesa el código en la URL: intercambia por token y guarda/actualiza el usuario
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
     const code = queryParams.get("code");
@@ -171,12 +172,11 @@ const MercadoLibreConnections = () => {
         if (renewAccountId) localStorage.removeItem("renewAccountId");
       };
       processCode();
-      // Limpiar la URL para evitar reprocesamiento
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
-  // Escucha cambios en Firestore para obtener las cuentas conectadas.
+  // Escucha cambios en Firestore para obtener las cuentas conectadas
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       if (snapshot && snapshot.docs) {
@@ -184,7 +184,6 @@ const MercadoLibreConnections = () => {
           id: docSnap.id,
           ...docSnap.data(),
         }));
-        // Ordena las cuentas alfabéticamente por nickname.
         acc.sort((a, b) => {
           const nameA = a.profile?.nickname || "";
           const nameB = b.profile?.nickname || "";
@@ -196,7 +195,7 @@ const MercadoLibreConnections = () => {
     return () => unsub();
   }, []);
 
-  // Verifica la validez de cada token y actualiza el estado (activo/inactivo).
+  // Verifica la validez de cada token y actualiza el estado
   useEffect(() => {
     const updateTokenStatuses = async () => {
       const statuses = {};

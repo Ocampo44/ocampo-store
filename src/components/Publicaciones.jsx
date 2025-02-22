@@ -1,13 +1,14 @@
+// Publicaciones.js
 import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
-import { 
-  collection, 
-  onSnapshot, 
-  setDoc, 
-  doc, 
-  getDocs, 
-  query, 
-  orderBy 
+import {
+  collection,
+  onSnapshot,
+  setDoc,
+  doc,
+  getDocs,
+  query,
+  orderBy,
 } from "firebase/firestore";
 
 const Publicaciones = () => {
@@ -20,7 +21,7 @@ const Publicaciones = () => {
     publicationId: "",
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 50; // Mostrar 50 productos por pestaña
+  const pageSize = 50; // Mostrar 50 productos por página
 
   // Escuchar las cuentas conectadas en Firestore (colección mercadolibreUsers)
   useEffect(() => {
@@ -47,12 +48,11 @@ const Publicaciones = () => {
   const savePublicacionesToDB = async (publicacionesArr) => {
     for (const pub of publicacionesArr) {
       try {
-        // Se usa el id de la publicación como id del documento
         await setDoc(
           doc(db, "publicaciones", pub.id.toString()),
           {
             ...pub,
-            updatedAt: new Date().toISOString(), // marca de tiempo de actualización
+            updatedAt: new Date().toISOString(),
           },
           { merge: true }
         );
@@ -62,7 +62,7 @@ const Publicaciones = () => {
     }
   };
 
-  // Función para cargar publicaciones desde Firestore (ordenadas, por ejemplo, por updatedAt)
+  // Función para cargar publicaciones desde Firestore (ordenadas por updatedAt)
   const loadPublicacionesFromDB = async () => {
     try {
       const q = query(
@@ -80,6 +80,10 @@ const Publicaciones = () => {
 
   // Función para obtener (y guardar) las publicaciones desde la API
   const fetchPublicaciones = async () => {
+    if (accounts.length === 0) {
+      console.error("No hay cuentas activas conectadas");
+      return;
+    }
     setLoading(true);
     let allPublicaciones = [];
     const limit = 50; // máximo permitido por la API
@@ -90,7 +94,7 @@ const Publicaciones = () => {
       if (!sellerId || !accessToken) continue;
 
       try {
-        // Usamos el endpoint de usuario para traer todas las publicaciones
+        // Primera llamada para conocer el total
         const firstResponse = await fetch(
           `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=0&status=all`,
           {
@@ -110,6 +114,7 @@ const Publicaciones = () => {
         console.log(`Cuenta ${account.id} - Total publicaciones: ${total}`);
         let offset = 0;
 
+        // Bucle para traer todas las páginas
         while (offset < total) {
           const pagedResponse = await fetch(
             `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=${limit}&offset=${offset}&status=all`,
@@ -129,7 +134,7 @@ const Publicaciones = () => {
           let pagedResults = pagedData.results || [];
           pagedResults = pagedResults.map((item) => ({
             ...item,
-            estado: item.status || "active", // usa el status que retorna la API o define uno por defecto
+            estado: item.status || "active",
             accountName: account.profile?.nickname || "Sin Nombre",
           }));
           allPublicaciones = allPublicaciones.concat(pagedResults);
@@ -145,19 +150,19 @@ const Publicaciones = () => {
     }
     // Guardar o actualizar en Firestore
     await savePublicacionesToDB(allPublicaciones);
-    // Luego, recargar desde la DB (esto te permite ver nuevas publicaciones o actualizaciones)
+    // Recargar publicaciones desde la DB
     await loadPublicacionesFromDB();
     setLoading(false);
   };
 
-  // Manejo de filtros para buscar por título, cuenta o ID
+  // Manejo de filtros
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
-    setCurrentPage(1); // Reinicia la paginación al filtrar
+    setCurrentPage(1);
   };
 
-  // Filtrar las publicaciones según los filtros aplicados
+  // Filtrar publicaciones según los filtros aplicados
   const filteredPublicaciones = publicaciones.filter((pub) => {
     const matchesTitulo = pub.title
       ?.toLowerCase()
@@ -169,7 +174,7 @@ const Publicaciones = () => {
     return matchesTitulo && matchesAccount && matchesId;
   });
 
-  // Paginación en la UI (50 items por pestaña)
+  // Paginación en la UI
   const totalPages = Math.ceil(filteredPublicaciones.length / pageSize);
   const paginatedPublicaciones = filteredPublicaciones.slice(
     (currentPage - 1) * pageSize,
