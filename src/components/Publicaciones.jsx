@@ -9,6 +9,7 @@ import {
   query,
   orderBy,
 } from "firebase/firestore";
+import "./Publicaciones.css"; // Asegúrate de tener estilos definidos aquí
 
 const Publicaciones = () => {
   const [products, setProducts] = useState([]);
@@ -82,14 +83,15 @@ const Publicaciones = () => {
     }
   };
 
-  // Consulta la API de MercadoLibre y procesa las publicaciones de cada cuenta
+  // Consulta la API de MercadoLibre para obtener solo las publicaciones activas
   const fetchUserProducts = async () => {
     setLoading(true);
     let allProducts = [];
     const limit = 50;
-    const additionalParams = "&include_filters=true&search_type=scan";
+    // Se solicita únicamente publicaciones activas
+    const additionalParams = "&status=active";
 
-    console.log(`🚀 Cargando publicaciones para ${accounts.length} cuentas...`);
+    console.log(`🚀 Cargando publicaciones activas para ${accounts.length} cuentas...`);
     if (accounts.length === 0) {
       console.warn("⚠️ No hay cuentas con tokens válidos.");
       setLoading(false);
@@ -116,10 +118,7 @@ const Publicaciones = () => {
           });
           if (!response.ok) {
             const errorData = await response.json();
-            console.error(
-              `❌ Error ${response.status} en la petición:`,
-              errorData
-            );
+            console.error(`❌ Error ${response.status} en la petición:`, errorData);
             break;
           }
           
@@ -132,12 +131,11 @@ const Publicaciones = () => {
             break;
           }
 
-          // Se asume que cada item es un objeto con propiedades "id" y "title"
+          // Se asume que cada item es un objeto con las propiedades "id" y "title"
           const mapped = data.results.map((item) => ({
             id: item.id,
             title: item.title,
             accountName: account.profile?.nickname || "Sin Nombre",
-            // Puedes agregar otros campos relevantes del item aquí
           }));
           
           allProducts = allProducts.concat(mapped);
@@ -158,26 +156,41 @@ const Publicaciones = () => {
   }, [products]);
 
   return (
-    <div>
-      <h1>Publicaciones</h1>
-      <button onClick={fetchUserProducts} disabled={loading}>
-        Traer Publicaciones
-      </button>
-      {loading ? (
-        <p>Cargando publicaciones...</p>
-      ) : (
-        <>
-          <p>Total de publicaciones en estado: {products.length}</p>
-          {products.length === 0 && <p>⚠️ No hay publicaciones para mostrar</p>}
-          <ul>
-            {products.map((prod) => (
-              <li key={prod.id}>
-                {prod.title} - {prod.id} ({prod.accountName})
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+    <div className="container my-4">
+      <h1 className="text-center mb-4">Publicaciones Activas</h1>
+      <div className="d-flex justify-content-center mb-3">
+        <button 
+          onClick={fetchUserProducts} 
+          disabled={loading}
+          className="btn btn-primary"
+        >
+          {loading ? "Cargando..." : "Traer Publicaciones"}
+        </button>
+      </div>
+      <div className="card shadow">
+        <div className="card-body">
+          {products.length === 0 ? (
+            <p className="text-center text-warning">⚠️ No hay publicaciones para mostrar</p>
+          ) : (
+            <>
+              <p className="text-center">
+                Total de publicaciones: <strong>{products.length}</strong>
+              </p>
+              <ul className="list-group">
+                {products.map((prod) => (
+                  <li key={prod.id} className="list-group-item d-flex justify-content-between align-items-center">
+                    <span>
+                      <strong>{prod.title}</strong> <br />
+                      <small>ID: {prod.id}</small>
+                    </span>
+                    <span className="badge bg-secondary">{prod.accountName}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
