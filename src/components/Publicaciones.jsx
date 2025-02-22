@@ -3,8 +3,9 @@ import React, { useEffect, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
-// Se espera que en el archivo .env tengas configurado REACT_APP_API_PROXY_URL
-// Ejemplo: REACT_APP_API_PROXY_URL=https://tudominio.com/proxy
+// Si cuentas con un proxy para evitar CORS, configúralo en tu .env, por ejemplo:
+// REACT_APP_API_PROXY_URL=https://tudominio.com/proxy
+// De lo contrario, se usará la URL directa de la API de MercadoLibre.
 const API_PROXY_URL = process.env.REACT_APP_API_PROXY_URL || "https://api.mercadolibre.com";
 
 const Publicaciones = () => {
@@ -12,7 +13,7 @@ const Publicaciones = () => {
   // Estructura: { [sellerId]: { items: [...], currentPage: 1, totalPages: N } }
   const [publicaciones, setPublicaciones] = useState({});
 
-  // Escucha las cuentas conectadas en Firestore
+  // Escucha en tiempo real las cuentas conectadas en Firestore
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const acc = snapshot.docs.map((docSnap) => ({
@@ -44,9 +45,10 @@ const Publicaciones = () => {
         if (response.ok) {
           const data = await response.json();
           console.log("Respuesta de la API:", data);
-          // La respuesta devuelve un arreglo de IDs en data.results
-          items.push(...data.results);
-          total = data.paging.total;
+          // Uso de encadenamiento opcional para evitar errores en caso de estructura inesperada
+          const results = data?.results || [];
+          items.push(...results);
+          total = data?.paging?.total || 0;
           offset += limit;
         } else {
           console.error(
@@ -64,7 +66,7 @@ const Publicaciones = () => {
     return items;
   };
 
-  // Para cada cuenta, se consultan y se guardan todas las publicaciones
+  // Para cada cuenta obtenida de Firestore, se consultan y guardan las publicaciones
   useEffect(() => {
     const fetchAllPublicaciones = async () => {
       const pubs = {};
@@ -91,7 +93,7 @@ const Publicaciones = () => {
     }
   }, [accounts]);
 
-  // Función de paginación para cada vendedor
+  // Función para cambiar de página en la paginación
   const handlePageChange = (sellerId, newPage) => {
     setPublicaciones((prev) => ({
       ...prev,
@@ -108,20 +110,19 @@ const Publicaciones = () => {
       {Object.keys(publicaciones).length === 0 && <p>No se encontraron publicaciones.</p>}
       {Object.entries(publicaciones).map(([sellerId, pubData]) => {
         const { items, currentPage, totalPages } = pubData;
-        // Calcula los ítems a mostrar según la página actual
+        // Calcula el slice de ítems a mostrar según la página actual
         const startIndex = (currentPage - 1) * 50;
         const endIndex = startIndex + 50;
         const itemsToShow = items.slice(startIndex, endIndex);
-
         return (
           <div key={sellerId} style={{ marginBottom: "40px" }}>
             <h2>Vendedor: {sellerId}</h2>
             {itemsToShow.length === 0 ? (
               <p>No hay publicaciones para este vendedor.</p>
             ) : (
-              itemsToShow.map((itemId) => (
+              itemsToShow.map((itemId, index) => (
                 <div
-                  key={itemId}
+                  key={itemId + index}
                   style={{
                     border: "1px solid #ddd",
                     padding: "10px",
@@ -130,7 +131,9 @@ const Publicaciones = () => {
                   }}
                 >
                   <p>ID de Publicación: {itemId}</p>
-                  {/* Aquí puedes agregar una llamada adicional para obtener detalles del ítem si es necesario */}
+                  {/* Si se requiere más información, se puede hacer una consulta adicional a:
+                      https://api.mercadolibre.com/items/{itemId}?access_token=${accessToken}
+                  */}
                 </div>
               ))
             )}
