@@ -1,3 +1,4 @@
+// App.js
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
@@ -14,7 +15,7 @@ import {
   orderBy,
 } from "firebase/firestore";
 
-// Importar componentes y páginas (asegúrate de tener implementados estos archivos)
+// Importar componentes y páginas
 import Sidebar from "./components/Sidebar";
 import ProductTable from "./components/ProductTable";
 import NewProduct from "./pages/NewProduct";
@@ -35,7 +36,6 @@ import MercadoLibreConnections from "./components/MercadoLibreConnections";
 import Publicaciones from "./components/Publicaciones";
 
 function App() {
-  // Estados generales de la aplicación
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
   const [rubros, setRubros] = useState([]);
@@ -59,7 +59,7 @@ function App() {
     return () => unsub();
   }, []);
 
-  // Suscripción en tiempo real a Almacenes (ordenados por "createdAt")
+  // Suscripción en tiempo real a Almacenes
   useEffect(() => {
     const q = query(collection(db, "almacenes"), orderBy("createdAt", "asc"));
     const unsub = onSnapshot(q, (snapshot) => {
@@ -91,53 +91,15 @@ function App() {
       snapshot.forEach((docSnap) => {
         transferArray.push({ id: docSnap.id, ...docSnap.data() });
       });
-      // Ordenar transferencias por fecha descendente
       transferArray.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       setTransferencias(transferArray);
     });
     return () => unsub();
   }, []);
 
-  // Funciones para manejo de productos
-  const handleAddProduct = (newProduct) => {
-    // Se asume que al crear el producto se inicializa el campo "stocks" en Firestore
-  };
-
-  const handleDeleteProduct = (id) => {
-    // La eliminación se gestiona directamente en Firestore
-  };
-
-  const handleUpdateProduct = (updatedProduct) => {
-    // La actualización se gestiona directamente en Firestore
-  };
-
-  const handleImportProducts = (importedProducts) => {
-    importedProducts.forEach(async (prod) => {
-      const initialStocks = {};
-      const initialTransitos = {};
-      warehouses.forEach((w) => {
-        initialStocks[w.id] = prod.stock || 0;
-        initialTransitos[w.id] = 0;
-      });
-      await addDoc(collection(db, "productos"), {
-        codigoProducto: prod.codigoProducto || "",
-        nombreProducto: prod.nombreProducto || "",
-        codigoBarras: String(prod.codigoBarras || ""),
-        idMercadolibre: prod.idMercadolibre || "",
-        stocks: initialStocks,
-        transitos: initialTransitos,
-        rubro: prod.rubro || "",
-        subRubro: prod.subRubro || "",
-      });
-    });
-  };
-
   // Funciones para actualizar stock y tránsito en Firestore
   const updateProductStockInFirestore = async (productId, warehouseId, newStock) => {
     try {
-      console.log(
-        `Actualizando producto ${productId} en almacén ${warehouseId} a stock ${newStock}`
-      );
       const productDocRef = doc(db, "productos", productId);
       await updateDoc(productDocRef, {
         [`stocks.${warehouseId}`]: newStock,
@@ -152,9 +114,6 @@ function App() {
 
   const updateProductTransitInFirestore = async (productId, warehouseId, newTransit) => {
     try {
-      console.log(
-        `Actualizando tránsito del producto ${productId} en almacén ${warehouseId} a ${newTransit}`
-      );
       const productDocRef = doc(db, "productos", productId);
       await updateDoc(productDocRef, {
         [`transitos.${warehouseId}`]: newTransit,
@@ -177,8 +136,6 @@ function App() {
       }
       const prodData = prodSnap.data();
       let currentStock = Number(prodData?.stocks?.[warehouseId] || 0);
-      console.log(`Producto ${prodId}: stock actual en almacén ${warehouseId} = ${currentStock}`);
-
       let newStock;
       if (tipoMovimiento === "Ingreso") {
         newStock = currentStock + Number(itemCantidad);
@@ -190,9 +147,7 @@ function App() {
         console.error("Tipo de movimiento desconocido:", tipoMovimiento);
         return;
       }
-
       newStock = Math.max(newStock, 0);
-      console.log(`Producto ${prodId}: nuevo stock en almacén ${warehouseId} = ${newStock}`);
       updateProductStockInFirestore(prodId, warehouseId, newStock);
     } catch (error) {
       console.error("Error en actualizarStockProducto:", error);
@@ -212,14 +167,10 @@ function App() {
   const handleImportMovimientos = async (importedMovements) => {
     try {
       for (const mov of importedMovements) {
-        console.log("Importando movimiento:", mov);
         const docRef = await addDoc(collection(db, "movimientos"), mov);
         mov.id = docRef.id;
         const whId = mov.almacen ? String(mov.almacen) : null;
-        if (!whId) {
-          console.error("Movimiento importado sin almacén definido:", mov);
-          continue;
-        }
+        if (!whId) continue;
         for (const item of mov.items) {
           const prod = products.find(
             (p) =>
@@ -228,8 +179,6 @@ function App() {
           );
           if (prod) {
             await actualizarStockProducto(prod.id, whId, item.cantidad, mov.tipoMovimiento);
-          } else {
-            console.error("No se encontró el producto para el código:", item.codigoProducto);
           }
         }
       }
@@ -238,24 +187,18 @@ function App() {
     }
   };
 
-  // ======================================================
   // TRANSFERENCIAS
-  // ======================================================
-  // Al crear una transferencia se descuenta el stock del almacén de origen y se suma la cantidad en "transitos" del almacén destino.
   const handleAddTransfer = async (newTransfer, transferItems, idOrigen, idDestino) => {
     const originId = String(idOrigen);
     const destId = String(idDestino);
-
     try {
       const docRef = await addDoc(collection(db, "transferencias"), newTransfer);
       newTransfer.id = docRef.id;
       setTransferencias((prev) => [...prev, newTransfer]);
     } catch (error) {
       console.error("Error al guardar la transferencia en Firestore:", error);
-      alert("Error al guardar la transferencia en la base de datos.");
       return;
     }
-
     setProducts((prevProducts) =>
       prevProducts.map((prod) => {
         const transfQty = transferItems
@@ -265,27 +208,18 @@ function App() {
               String(prod.codigoProducto).trim().toLowerCase()
           )
           .reduce((acc, item) => acc + Number(item.cantidad), 0);
-
         if (transfQty === 0) return prod;
-
         let newStocks = { ...prod.stocks };
         let newTransitos = { ...prod.transitos };
-
         newStocks[originId] = (newStocks[originId] || 0) - transfQty;
         newTransitos[destId] = (newTransitos[destId] || 0) + transfQty;
-
         updateProductStockInFirestore(prod.id, originId, Math.max(newStocks[originId], 0));
         updateProductTransitInFirestore(prod.id, destId, newTransitos[destId]);
-
         return { ...prod, stocks: newStocks, transitos: newTransitos };
       })
     );
   };
 
-  /**
-   * handleRecepcionarTransfer: Actualiza la recepción de una transferencia,
-   * ajusta stocks y transitos, y registra el movimiento de recepción.
-   */
   const handleRecepcionarTransfer = (updatedTransfer) => {
     const oldTransfer = transferencias.find((t) => t.id === updatedTransfer.id) || {};
     const oldReceivedDict = {};
@@ -294,20 +228,16 @@ function App() {
         oldReceivedDict[String(item.codigoProducto).toLowerCase()] = item.received;
       });
     }
-
     const incrementalReceivedItems = (updatedTransfer.receivedItems || []).map((item) => {
       const code = String(item.codigoProducto).toLowerCase();
       const oldReceived = oldReceivedDict[code] || 0;
       return { ...item, incremental: item.received - oldReceived };
     });
-
     setTransferencias((prev) =>
       prev.map((t) => (t.id === updatedTransfer.id ? updatedTransfer : t))
     );
-
     const originId = String(updatedTransfer.depositoOrigenId);
     const destId = String(updatedTransfer.depositoDestinoId);
-
     setProducts((prevProducts) => {
       return prevProducts.map((prod) => {
         const code = String(prod.codigoProducto).toLowerCase();
@@ -317,19 +247,15 @@ function App() {
         if (incItem && incItem.incremental > 0) {
           let newTransitos = { ...prod.transitos };
           let newStocks = { ...prod.stocks };
-
           newTransitos[destId] = Math.max((newTransitos[destId] || 0) - incItem.incremental, 0);
           newStocks[destId] = (newStocks[destId] || 0) + incItem.incremental;
-
           updateProductStockInFirestore(prod.id, destId, newStocks[destId]);
           updateProductTransitInFirestore(prod.id, destId, newTransitos[destId]);
-
           return { ...prod, stocks: newStocks, transitos: newTransitos };
         }
         return prod;
       });
     });
-
     let warehouseDestinationName = updatedTransfer.depositoDestino;
     const foundWarehouse = warehouses.find(
       (w) => String(w.id) === String(updatedTransfer.depositoDestino)
@@ -337,7 +263,6 @@ function App() {
     if (foundWarehouse) {
       warehouseDestinationName = foundWarehouse.nombre;
     }
-
     incrementalReceivedItems.forEach((item) => {
       if (item.incremental > 0) {
         const newMovement = {
@@ -366,14 +291,13 @@ function App() {
         <Sidebar />
         <div className="flex-1 p-4 ml-64">
           <Routes>
-            {/* Rutas para productos */}
             <Route
               path="/productos"
               element={
                 <ProductTable
                   products={products}
                   onDeleteProduct={() => {}}
-                  onImportProducts={handleImportProducts}
+                  onImportProducts={() => {}}
                   warehouses={warehouses}
                   rubros={rubros}
                 />
@@ -381,20 +305,18 @@ function App() {
             />
             <Route
               path="/productos/nuevo"
-              element={<NewProduct onAddProduct={handleAddProduct} rubros={rubros} />}
+              element={<NewProduct onAddProduct={() => {}} rubros={rubros} />}
             />
             <Route
               path="/productos/editar/:id"
               element={
                 <EditProduct
                   products={products}
-                  onUpdateProduct={handleUpdateProduct}
+                  onUpdateProduct={() => {}}
                   rubros={rubros}
                 />
               }
             />
-
-            {/* Rutas para movimientos */}
             <Route
               path="/movimientos"
               element={
@@ -416,15 +338,11 @@ function App() {
                 />
               }
             />
-
-            {/* Rutas para almacenes y rubros */}
             <Route
               path="/almacenes"
               element={<Almacenes warehouses={warehouses} setWarehouses={setWarehouses} />}
             />
             <Route path="/rubros" element={<Rubros rubros={rubros} setRubros={setRubros} />} />
-
-            {/* Rutas para transferencias */}
             <Route
               path="/transferencias"
               element={
@@ -456,8 +374,6 @@ function App() {
                 />
               }
             />
-
-            {/* Rutas para compras */}
             <Route path="/compras" element={<Compras />} />
             <Route
               path="/compras/agregar"
@@ -467,10 +383,7 @@ function App() {
               path="/compras/editar/:id"
               element={<EditCompraForm warehouses={warehouses} productosDisponibles={products} />}
             />
-
-            {/* Rutas para MercadoLibre */}
             <Route path="/mercadolibre" element={<MercadoLibreConnections />} />
-            {/* Rutas para publicaciones */}
             <Route path="/publicaciones" element={<Publicaciones />} />
           </Routes>
         </div>
