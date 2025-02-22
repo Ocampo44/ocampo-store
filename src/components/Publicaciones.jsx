@@ -9,7 +9,7 @@ const Publicaciones = () => {
   const [publicaciones, setPublicaciones] = useState({});
   const SITE_ID = "MLM"; // Cambia este valor según la región (MLM, MLA, MLB, etc.)
 
-  // Escucha las cuentas conectadas en Firestore
+  // Escucha en tiempo real las cuentas conectadas en Firestore
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const acc = snapshot.docs.map((docSnap) => ({
@@ -21,12 +21,11 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para traer todas las publicaciones de un vendedor
-  // utilizando 50 items por consulta
+  // Función para traer todas las publicaciones de un vendedor utilizando 50 ítems por consulta
   const fetchPublicacionesForSeller = async (sellerId) => {
     const items = [];
     let offset = 0;
-    const limit = 50; // Máximo 50 items por consulta
+    const limit = 50; // Límite máximo permitido para usuarios públicos
     let total = 0;
     try {
       do {
@@ -54,7 +53,7 @@ const Publicaciones = () => {
     return items;
   };
 
-  // Para cada cuenta, se consultan y se guardan todas las publicaciones
+  // Para cada cuenta conectada, se consultan y se guardan todas las publicaciones
   useEffect(() => {
     const fetchAllPublicaciones = async () => {
       const pubs = {};
@@ -62,7 +61,7 @@ const Publicaciones = () => {
         const sellerId = account.profile?.id;
         if (sellerId) {
           const items = await fetchPublicacionesForSeller(sellerId);
-          // Se calcula el total de páginas (50 items por página en la UI)
+          // Calcula el total de páginas (50 ítems por página)
           const totalPages = Math.ceil(items.length / 50);
           pubs[sellerId] = {
             items,
@@ -79,7 +78,7 @@ const Publicaciones = () => {
     }
   }, [accounts]);
 
-  // Función para cambiar de página en la UI para cada vendedor
+  // Función para manejar el cambio de página en la interfaz para cada vendedor
   const handlePageChange = (sellerId, newPage) => {
     setPublicaciones((prev) => ({
       ...prev,
@@ -147,10 +146,7 @@ const Publicaciones = () => {
                 </span>
                 <button
                   onClick={() =>
-                    handlePageChange(
-                      sellerId,
-                      Math.min(currentPage + 1, totalPages)
-                    )
+                    handlePageChange(sellerId, Math.min(currentPage + 1, totalPages))
                   }
                   disabled={currentPage === totalPages}
                 >
