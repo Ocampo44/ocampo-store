@@ -7,7 +7,8 @@ const Publicaciones = () => {
   const [accounts, setAccounts] = useState([]);
   // Estructura: { [sellerId]: { items: [...], currentPage: 1, totalPages: N } }
   const [publicaciones, setPublicaciones] = useState({});
-  const SITE_ID = "MLM"; // Cambiar según corresponda
+  // Aunque en el endpoint se utiliza /users, el sellerId es el mismo que se obtiene del perfil de la cuenta
+  const SITE_ID = "MLM"; // Se mantiene por referencia si se requiere en otro contexto
 
   // Escucha las cuentas conectadas en Firestore
   useEffect(() => {
@@ -25,12 +26,12 @@ const Publicaciones = () => {
   const fetchPublicacionesForSeller = async (accessToken, sellerId) => {
     const items = [];
     let offset = 0;
-    const limit = 100; // Límite máximo por llamada
+    const limit = 50; // Límite según la documentación
     let total = 0;
     try {
       do {
         const response = await fetch(
-          `https://api.mercadolibre.com/sites/${SITE_ID}/search?seller_id=${sellerId}&limit=${limit}&offset=${offset}`,
+          `https://api.mercadolibre.com/users/${sellerId}/items/search?include_filters=true&limit=${limit}&offset=${offset}`,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -39,6 +40,9 @@ const Publicaciones = () => {
         );
         if (response.ok) {
           const data = await response.json();
+          // La respuesta contiene un array de IDs en data.results.
+          // Si se necesitan los detalles completos de cada publicación, se deberá realizar una llamada adicional
+          // por cada ID, por ejemplo: https://api.mercadolibre.com/items/{itemId}?access_token=${accessToken}
           items.push(...data.results);
           total = data.paging.total;
           offset += limit;
@@ -112,9 +116,9 @@ const Publicaciones = () => {
             {itemsToShow.length === 0 ? (
               <p>No hay publicaciones para este vendedor.</p>
             ) : (
-              itemsToShow.map((item) => (
+              itemsToShow.map((itemId) => (
                 <div
-                  key={item.id}
+                  key={itemId}
                   style={{
                     border: "1px solid #ddd",
                     padding: "10px",
@@ -122,15 +126,8 @@ const Publicaciones = () => {
                     borderRadius: "4px",
                   }}
                 >
-                  <h3>{item.title}</h3>
-                  {item.thumbnail && (
-                    <img
-                      src={item.thumbnail}
-                      alt={item.title}
-                      style={{ maxWidth: "150px" }}
-                    />
-                  )}
-                  <p>Precio: ${item.price}</p>
+                  <p>ID de Publicación: {itemId}</p>
+                  {/* Si se desea obtener más detalles, se podría realizar una consulta adicional por cada itemId */}
                 </div>
               ))
             )}
