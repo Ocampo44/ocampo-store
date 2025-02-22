@@ -1,4 +1,4 @@
-// MercadoLibreConnections.js
+// src/components/MercadoLibreConnections.js
 import React, { useEffect, useState } from "react";
 import {
   collection,
@@ -74,8 +74,9 @@ const MercadoLibreConnections = () => {
     try {
       const { codeVerifier, codeChallenge } = await generateCodeVerifierAndChallenge();
       localStorage.setItem("code_verifier", codeVerifier);
-      const redirectUri = "https://www.ocampostore.store/mercadolibre";
-      const authUrl = `https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=8505590495521677&redirect_uri=${encodeURIComponent(
+      const redirectUri = "https://www.tu-dominio.com/mercadolibre"; 
+      // Reemplaza con tu dominio y ruta correctos
+      const authUrl = `https://auth.mercadolibre.com.mx/authorization?response_type=code&client_id=TU_CLIENT_ID&redirect_uri=${encodeURIComponent(
         redirectUri
       )}&code_challenge=${codeChallenge}&code_challenge_method=S256&scope=offline_access%20read%20write`;
       window.location.href = authUrl;
@@ -110,10 +111,10 @@ const MercadoLibreConnections = () => {
     }
     const data = new URLSearchParams();
     data.append("grant_type", "authorization_code");
-    data.append("client_id", "8505590495521677");
-    data.append("client_secret", "Ps3qGnQHLgllwWjcjV0HuDxgBAwYFjLL");
+    data.append("client_id", "TU_CLIENT_ID");
+    data.append("client_secret", "TU_CLIENT_SECRET");
     data.append("code", code);
-    data.append("redirect_uri", "https://www.ocampostore.store/mercadolibre");
+    data.append("redirect_uri", "https://www.tu-dominio.com/mercadolibre");
     data.append("code_verifier", codeVerifier);
 
     try {
@@ -158,12 +159,19 @@ const MercadoLibreConnections = () => {
         const profileId = profileData.id.toString();
         const renewAccountId = localStorage.getItem("renewAccountId");
         const accountDocId = renewAccountId ? renewAccountId : profileId;
+
+        // Guarda en Firestore
         const userDocRef = doc(db, "mercadolibreUsers", accountDocId);
         await setDoc(
           userDocRef,
           { token: tokenData, profile: profileData, code },
           { merge: true }
         );
+
+        // Guarda también en localStorage para que otros componentes lo usen (Publicaciones, etc.)
+        localStorage.setItem("mercadoLibreAccessToken", tokenData.access_token);
+        localStorage.setItem("mercadoLibreUserId", profileId);
+
         setStatus(
           renewAccountId
             ? "Token renovado exitosamente"

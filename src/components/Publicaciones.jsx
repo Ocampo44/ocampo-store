@@ -6,7 +6,7 @@ const Publicaciones = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Suponiendo que el token y userId se guardan en localStorage
+  // Obtenemos token e ID desde localStorage
   const accessToken = localStorage.getItem("mercadoLibreAccessToken");
   const userId = localStorage.getItem("mercadoLibreUserId");
 
@@ -18,6 +18,7 @@ const Publicaciones = () => {
         return;
       }
       try {
+        // Ejemplo de llamada para obtener publicaciones ordenadas por fecha de inicio (descendente)
         const url = `https://api.mercadolibre.com/users/${userId}/items/search?orders=start_time_desc`;
         const response = await fetch(url, {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -26,6 +27,7 @@ const Publicaciones = () => {
           throw new Error(`Error en la respuesta: ${response.status}`);
         }
         const data = await response.json();
+        // data.results contiene los IDs de las publicaciones
         setPublicaciones(data.results || []);
       } catch (err) {
         console.error("Error al obtener publicaciones:", err);
