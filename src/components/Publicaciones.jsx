@@ -31,59 +31,76 @@ const Publicaciones = () => {
         if (!accessToken || !userId) continue;
 
         try {
-          const estados = ["active", "paused", "closed"]; // 📌 Separar por estado
+          // 🔍 1. Obtener todas las categorías en las que el usuario tiene publicaciones
+          const categoriasResponse = await fetch(
+            `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&limit=50`
+          );
+          if (!categoriasResponse.ok) {
+            console.error("⚠️ Error al obtener categorías:", categoriasResponse.status);
+            continue;
+          }
+
+          const categoriasData = await categoriasResponse.json();
+          const todasLasCategorias = [...new Set(categoriasData.results.map((id) => id.category_id))];
+
+          console.log(`📂 Categorías encontradas para ${nickname}:`, todasLasCategorias);
+
+          const estados = ["active", "paused", "closed"];
           let publicacionesTemp = [];
 
-          for (const estado of estados) {
-            let offset = 0;
-            let totalItems = Infinity;
+          // 🔍 2. Consultar publicaciones separadas por `category_id` y `status`
+          for (const categoria of todasLasCategorias) {
+            for (const estado of estados) {
+              let offset = 0;
+              let totalItems = Infinity;
 
-            console.log(`🔍 Buscando publicaciones (${estado}) para ${nickname}...`);
+              console.log(`🔍 Buscando publicaciones en categoría ${categoria} (${estado}) para ${nickname}...`);
 
-            while (offset < totalItems) {
-              const searchUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=${estado}&offset=${offset}&limit=50`;
+              while (offset < totalItems) {
+                const searchUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&category=${categoria}&status=${estado}&offset=${offset}&limit=50`;
 
-              console.log(`➡️ Fetching: ${searchUrl}`);
-              const searchResponse = await fetch(searchUrl);
-              if (!searchResponse.ok) {
-                console.error(`⚠️ Error al obtener IDs (${estado}):`, searchResponse.status);
-                break;
-              }
-
-              const searchData = await searchResponse.json();
-              const itemIds = searchData.results || [];
-              totalItems = searchData.paging?.total || itemIds.length;
-
-              console.log(`📌 Total Items en ML (${estado}): ${totalItems}, Offset Actual: ${offset}`);
-
-              if (itemIds.length === 0) break;
-              offset += searchData.paging?.limit || 50;
-
-              // Obtener detalles en lotes de 20
-              const batchSize = 20;
-              for (let i = 0; i < itemIds.length; i += batchSize) {
-                const batchIds = itemIds.slice(i, i + batchSize).join(",");
-                const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
-                
-                console.log(`📦 Obteniendo detalles: ${itemsUrl}`);
-                const itemsResponse = await fetch(itemsUrl);
-                if (!itemsResponse.ok) {
-                  console.error("⚠️ Error al obtener detalles de publicaciones:", itemsResponse.status);
-                  continue;
+                console.log(`➡️ Fetching: ${searchUrl}`);
+                const searchResponse = await fetch(searchUrl);
+                if (!searchResponse.ok) {
+                  console.error(`⚠️ Error al obtener IDs (${estado}, categoría ${categoria}):`, searchResponse.status);
+                  break;
                 }
 
-                const itemsData = await itemsResponse.json();
-                const validItems = itemsData
-                  .filter((item) => item.code === 200)
-                  .map((item) => ({
-                    ...item.body,
-                    userNickname: nickname,
-                  }));
+                const searchData = await searchResponse.json();
+                const itemIds = searchData.results || [];
+                totalItems = searchData.paging?.total || itemIds.length;
 
-                publicacionesTemp.push(...validItems);
+                console.log(`📌 Total Items en ML (${estado}, categoría ${categoria}): ${totalItems}, Offset: ${offset}`);
+
+                if (itemIds.length === 0) break;
+                offset += searchData.paging?.limit || 50;
+
+                // Obtener detalles en lotes de 20
+                const batchSize = 20;
+                for (let i = 0; i < itemIds.length; i += batchSize) {
+                  const batchIds = itemIds.slice(i, i + batchSize).join(",");
+                  const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
+
+                  console.log(`📦 Obteniendo detalles: ${itemsUrl}`);
+                  const itemsResponse = await fetch(itemsUrl);
+                  if (!itemsResponse.ok) {
+                    console.error("⚠️ Error al obtener detalles de publicaciones:", itemsResponse.status);
+                    continue;
+                  }
+
+                  const itemsData = await itemsResponse.json();
+                  const validItems = itemsData
+                    .filter((item) => item.code === 200)
+                    .map((item) => ({
+                      ...item.body,
+                      userNickname: nickname,
+                    }));
+
+                  publicacionesTemp.push(...validItems);
+                }
+
+                await new Promise((r) => setTimeout(r, 500));
               }
-
-              await new Promise((r) => setTimeout(r, 500));
             }
           }
 
@@ -118,6 +135,7 @@ const Publicaciones = () => {
             <li key={pub.id}>
               <h3>{pub.title}</h3>
               <p><strong>Cuenta:</strong> {pub.userNickname}</p>
+              <p><strong>Categoría:</strong> {pub.category_id}</p>
             </li>
           ))}
         </ul>
