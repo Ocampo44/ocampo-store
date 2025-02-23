@@ -9,47 +9,55 @@ const styles = {
   container: {
     maxWidth: "1200px",
     margin: "0 auto",
-    padding: "20px",
+    padding: "30px",
     fontFamily: "'Roboto', sans-serif",
-    color: "#333",
+    color: "#444",
+    backgroundColor: "#f7f9fc",
+    borderRadius: "8px",
+    boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
   },
   header: {
     textAlign: "center",
     marginBottom: "30px",
   },
-  filters: {
+  filtersContainer: {
     display: "flex",
     flexWrap: "wrap",
     gap: "20px",
     justifyContent: "center",
-    marginBottom: "20px",
+    marginBottom: "30px",
   },
   input: {
     padding: "10px",
-    width: "300px",
+    width: "250px",
     border: "1px solid #ccc",
     borderRadius: "4px",
     fontSize: "16px",
   },
   select: {
     padding: "10px",
+    width: "250px",
     border: "1px solid #ccc",
     borderRadius: "4px",
     fontSize: "16px",
+    backgroundColor: "#fff",
   },
   cardList: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
     gap: "20px",
   },
   card: {
-    border: "1px solid #e0e0e0",
+    backgroundColor: "#fff",
     borderRadius: "8px",
     overflow: "hidden",
-    boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
-    backgroundColor: "#fff",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
     display: "flex",
     flexDirection: "column",
+    transition: "transform 0.2s",
+  },
+  cardHover: {
+    transform: "translateY(-5px)",
   },
   cardImage: {
     width: "100%",
@@ -61,35 +69,44 @@ const styles = {
   },
   cardTitle: {
     fontSize: "18px",
-    fontWeight: "bold",
+    fontWeight: "600",
     marginBottom: "10px",
+    color: "#1976d2",
   },
   cardText: {
     fontSize: "14px",
-    marginBottom: "5px",
+    marginBottom: "6px",
+    lineHeight: "1.4",
   },
   pagination: {
     display: "flex",
     justifyContent: "center",
     marginTop: "30px",
-    flexWrap: "wrap",
-    gap: "10px",
+    gap: "15px",
   },
-  pageButton: (active) => ({
-    padding: "8px 12px",
-    border: "1px solid #ccc",
+  button: {
+    padding: "10px 20px",
+    border: "none",
     borderRadius: "4px",
-    backgroundColor: active ? "#1976d2" : "#fff",
-    color: active ? "#fff" : "#1976d2",
+    fontSize: "16px",
     cursor: "pointer",
-  }),
+    backgroundColor: "#1976d2",
+    color: "#fff",
+    transition: "background-color 0.3s",
+  },
+  buttonDisabled: {
+    backgroundColor: "#ccc",
+    cursor: "default",
+  },
 };
 
 const Publicaciones = () => {
   const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState([]);
-  const [busqueda, setBusqueda] = useState("");
+  const [busquedaTitulo, setBusquedaTitulo] = useState("");
+  const [busquedaId, setBusquedaId] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("Todos");
+  const [selectedCuenta, setSelectedCuenta] = useState("Todas");
   const [currentPage, setCurrentPage] = useState(1);
 
   // Escuchar cambios en Firestore para obtener las cuentas con token
@@ -186,43 +203,75 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // Filtrar publicaciones según la búsqueda y el estado seleccionado
+  // Filtros: título, id, status y cuenta
   const publicacionesFiltradas = useMemo(() => {
     return publicaciones.filter((item) => {
       const titulo = item.title?.toLowerCase() || "";
-      const busquedaOk = titulo.includes(busqueda.toLowerCase());
-      const statusOk = selectedStatus === "Todos" || item.status === selectedStatus;
-      return busquedaOk && statusOk;
+      const idPublicacion = item.id?.toString() || "";
+      const filtroTitulo = titulo.includes(busquedaTitulo.toLowerCase());
+      const filtroId = busquedaId.trim() === "" || idPublicacion.includes(busquedaId);
+      const filtroStatus = selectedStatus === "Todos" || item.status === selectedStatus;
+      const filtroCuenta =
+        selectedCuenta === "Todas" || item.userNickname === selectedCuenta;
+      return filtroTitulo && filtroId && filtroStatus && filtroCuenta;
     });
-  }, [publicaciones, busqueda, selectedStatus]);
+  }, [publicaciones, busquedaTitulo, busquedaId, selectedStatus, selectedCuenta]);
 
-  // Paginación
+  // Paginación (sin números, solo "Anterior" y "Siguiente")
   const totalPaginas = Math.ceil(publicacionesFiltradas.length / ITEMS_PER_PAGE);
   const indexInicio = (currentPage - 1) * ITEMS_PER_PAGE;
-  const publicacionesPaginadas = publicacionesFiltradas.slice(indexInicio, indexInicio + ITEMS_PER_PAGE);
+  const publicacionesPaginadas = publicacionesFiltradas.slice(
+    indexInicio,
+    indexInicio + ITEMS_PER_PAGE
+  );
 
-  // Obtener lista de estados disponibles para el dropdown
+  // Dropdown de estados disponibles
   const estadosDisponibles = useMemo(() => {
     const estados = publicaciones.map((pub) => pub.status);
     return ["Todos", ...Array.from(new Set(estados))];
   }, [publicaciones]);
 
+  // Dropdown de cuentas disponibles
+  const cuentasDisponibles = useMemo(() => {
+    const nombres = cuentas.map((cuenta) => cuenta.profile?.nickname || "Sin Nombre");
+    return ["Todas", ...Array.from(new Set(nombres))];
+  }, [cuentas]);
+
+  // Funciones de paginación
+  const handleAnterior = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  const handleSiguiente = () => {
+    if (currentPage < totalPaginas) setCurrentPage(currentPage + 1);
+  };
+
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <h2>Publicaciones de usuarios conectados</h2>
+        <h2>Publicaciones de Usuarios Conectados</h2>
         <p>
-          <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
+          <strong>Total:</strong> {publicacionesFiltradas.length} publicaciones
         </p>
       </header>
 
-      <div style={styles.filters}>
+      <div style={styles.filtersContainer}>
         <input
           type="text"
-          placeholder="Buscar ítems..."
-          value={busqueda}
+          placeholder="Buscar por título..."
+          value={busquedaTitulo}
           onChange={(e) => {
-            setBusqueda(e.target.value);
+            setBusquedaTitulo(e.target.value);
+            setCurrentPage(1);
+          }}
+          style={styles.input}
+        />
+        <input
+          type="text"
+          placeholder="Buscar por ID..."
+          value={busquedaId}
+          onChange={(e) => {
+            setBusquedaId(e.target.value);
             setCurrentPage(1);
           }}
           style={styles.input}
@@ -238,6 +287,20 @@ const Publicaciones = () => {
           {estadosDisponibles.map((estado) => (
             <option key={estado} value={estado}>
               {estado}
+            </option>
+          ))}
+        </select>
+        <select
+          value={selectedCuenta}
+          onChange={(e) => {
+            setSelectedCuenta(e.target.value);
+            setCurrentPage(1);
+          }}
+          style={styles.select}
+        >
+          {cuentasDisponibles.map((cuenta) => (
+            <option key={cuenta} value={cuenta}>
+              {cuenta}
             </option>
           ))}
         </select>
@@ -257,7 +320,7 @@ const Publicaciones = () => {
               <div style={styles.cardBody}>
                 <h3 style={styles.cardTitle}>{pub.title}</h3>
                 <p style={styles.cardText}>
-                  Precio: {pub.price} {pub.currency_id}
+                  <strong>Precio:</strong> {pub.price} {pub.currency_id}
                 </p>
                 <p style={styles.cardText}>
                   <strong>Cuenta:</strong> {pub.userNickname}
@@ -276,15 +339,26 @@ const Publicaciones = () => {
 
       {totalPaginas > 1 && (
         <div style={styles.pagination}>
-          {Array.from({ length: totalPaginas }, (_, idx) => idx + 1).map((num) => (
-            <button
-              key={num}
-              onClick={() => setCurrentPage(num)}
-              style={styles.pageButton(num === currentPage)}
-            >
-              {num}
-            </button>
-          ))}
+          <button
+            onClick={handleAnterior}
+            disabled={currentPage === 1}
+            style={{
+              ...styles.button,
+              ...(currentPage === 1 ? styles.buttonDisabled : {}),
+            }}
+          >
+            Anterior
+          </button>
+          <button
+            onClick={handleSiguiente}
+            disabled={currentPage === totalPaginas}
+            style={{
+              ...styles.button,
+              ...(currentPage === totalPaginas ? styles.buttonDisabled : {}),
+            }}
+          >
+            Siguiente
+          </button>
         </div>
       )}
     </div>
