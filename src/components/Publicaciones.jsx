@@ -7,25 +7,23 @@ const ITEMS_PER_PAGE = 20;
 
 const styles = {
   container: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-    padding: "30px",
+    width: "100%",
+    padding: "10px 20px",
     fontFamily: "'Roboto', sans-serif",
     color: "#444",
     backgroundColor: "#f7f9fc",
-    borderRadius: "8px",
-    boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
+    boxSizing: "border-box",
   },
   header: {
     textAlign: "center",
-    marginBottom: "30px",
+    marginBottom: "20px",
   },
   filtersContainer: {
     display: "flex",
     flexWrap: "wrap",
     gap: "20px",
     justifyContent: "center",
-    marginBottom: "30px",
+    marginBottom: "10px",
   },
   input: {
     padding: "10px",
@@ -66,7 +64,6 @@ const styles = {
   },
   statusBadge: (status) => {
     let backgroundColor = "#999";
-    // Ajusta los colores según el estado. Puedes personalizar o agregar nuevos estados.
     if (status === "active") backgroundColor = "#4caf50"; // verde
     else if (status === "paused") backgroundColor = "#ff9800"; // naranja
     else if (status === "inactive") backgroundColor = "#f44336"; // rojo
@@ -84,7 +81,7 @@ const styles = {
   pagination: {
     display: "flex",
     justifyContent: "center",
-    marginTop: "30px",
+    marginTop: "20px",
     gap: "15px",
   },
   button: {
