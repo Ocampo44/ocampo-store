@@ -41,59 +41,67 @@ const Publicaciones = () => {
 
         try {
           const estados = ["active", "paused", "closed"];
-          const rangosPrecio = ["0-50", "50-100", "100-200", "200-300", "300-400", "400-500",
-                                "500-750", "750-1000", "1000-1500", "1500-2000", "2000-5000",
-                                "5000-10000", "10000-"];
-          const fechas = ["30d", "60d", "90d", "180d", "365d"]; // 🔹 Filtramos por fechas
+          let allItemIds = [];
 
           for (const estado of estados) {
-            for (const precio of rangosPrecio) {
-              for (const fecha of fechas) { // 🔥 Nueva división por fecha
-                let offset = 0;
-                let totalItems = Infinity;
+            let offset = 0;
+            let totalItems = Infinity;
 
-                while (offset < totalItems) {
-                  const searchUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=${estado}&price=${precio}&date_created=${fecha}&offset=${offset}&limit=50`;
+            console.log(`🔍 Buscando publicaciones en estado: ${estado} para ${nickname}...`);
 
-                  const searchResponse = await fetch(searchUrl);
-                  if (!searchResponse.ok) break;
+            while (offset < totalItems) {
+              const searchUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=${estado}&offset=${offset}&limit=50`;
 
-                  const searchData = await searchResponse.json();
-                  const itemIds = searchData.results || [];
-                  totalItems = searchData.paging?.total || itemIds.length;
-
-                  if (itemIds.length === 0) break;
-                  offset += searchData.paging?.limit || 50;
-
-                  // Obtener detalles en lotes de 20
-                  const batchSize = 20;
-                  for (let i = 0; i < itemIds.length; i += batchSize) {
-                    const batchIds = itemIds.slice(i, i + batchSize).join(",");
-                    const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
-
-                    const itemsResponse = await fetch(itemsUrl);
-                    if (!itemsResponse.ok) continue;
-
-                    const itemsData = await itemsResponse.json();
-                    const validItems = itemsData
-                      .filter((item) => item.code === 200)
-                      .map((item) => ({
-                        ...item.body,
-                        userNickname: nickname,
-                      }));
-
-                    for (const item of validItems) {
-                      tempPublicaciones.set(item.id, item);
-                    }
-
-                    setPublicaciones(new Map(tempPublicaciones));
-                  }
-
-                  await new Promise((r) => setTimeout(r, 500)); // Evitar bloqueos
-                }
+              console.log(`➡️ Fetching: ${searchUrl}`);
+              const searchResponse = await fetch(searchUrl);
+              if (!searchResponse.ok) {
+                console.error(`⚠️ Error al obtener IDs (${estado}):`, searchResponse.status);
+                break;
               }
+
+              const searchData = await searchResponse.json();
+              const itemIds = searchData.results || [];
+              totalItems = searchData.paging?.total || itemIds.length;
+
+              console.log(`📌 Total Items en ML (${estado}): ${totalItems}, Offset Actual: ${offset}, IDs obtenidos: ${itemIds.length}`);
+
+              if (itemIds.length === 0) break;
+              offset += searchData.paging?.limit || 50;
+              allItemIds.push(...itemIds);
             }
           }
+
+          console.log(`✅ Total IDs recopilados para ${nickname}: ${allItemIds.length}`);
+
+          // 🔹 Obtener detalles de los IDs en lotes de 20
+          const batchSize = 20;
+          for (let i = 0; i < allItemIds.length; i += batchSize) {
+            const batchIds = allItemIds.slice(i, i + batchSize).join(",");
+            const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
+
+            console.log(`📦 Obteniendo detalles: ${itemsUrl}`);
+            const itemsResponse = await fetch(itemsUrl);
+            if (!itemsResponse.ok) {
+              console.error("⚠️ Error al obtener detalles de publicaciones:", itemsResponse.status);
+              continue;
+            }
+
+            const itemsData = await itemsResponse.json();
+            const validItems = itemsData
+              .filter((item) => item.code === 200)
+              .map((item) => ({
+                ...item.body,
+                userNickname: nickname,
+              }));
+
+            for (const item of validItems) {
+              tempPublicaciones.set(item.id, item);
+            }
+
+            setPublicaciones(new Map(tempPublicaciones));
+            await new Promise((r) => setTimeout(r, 500));
+          }
+
         } catch (error) {
           console.error("❌ Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
@@ -127,13 +135,7 @@ const Publicaciones = () => {
           ))}
         </select>
 
-        <input
-          type="text"
-          placeholder="Buscar por título..."
-          value={filtroTitulo}
-          onChange={(e) => setFiltroTitulo(e.target.value)}
-          style={{ padding: "8px", maxWidth: "200px" }}
-        />
+        <input type="text" placeholder="Buscar por título..." value={filtroTitulo} onChange={(e) => setFiltroTitulo(e.target.value)} style={{ padding: "8px", maxWidth: "200px" }}/>
 
         <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} style={{ padding: "6px" }}>
           <option value="">Todos los estados</option>
@@ -142,13 +144,7 @@ const Publicaciones = () => {
           <option value="closed">Cerrado</option>
         </select>
 
-        <input
-          type="text"
-          placeholder="Buscar por ID..."
-          value={filtroID}
-          onChange={(e) => setFiltroID(e.target.value)}
-          style={{ padding: "8px", maxWidth: "200px" }}
-        />
+        <input type="text" placeholder="Buscar por ID..." value={filtroID} onChange={(e) => setFiltroID(e.target.value)} style={{ padding: "8px", maxWidth: "200px" }}/>
       </div>
 
       <p><strong>Total de publicaciones:</strong> {publicacionesArray.length}</p>
