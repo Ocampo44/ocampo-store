@@ -29,7 +29,7 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Para cada cuenta, obtener los IDs de sus publicaciones y sus detalles
+  // 2. Obtener todas las publicaciones de cada cuenta, utilizando paginación en la petición a la API
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let todasLasPublicaciones = [];
@@ -42,24 +42,36 @@ const Publicaciones = () => {
         if (!accessToken || !userId) continue;
 
         try {
-          // Obtener los IDs de las publicaciones
-          const searchResponse = await fetch(
-            `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}`
-          );
-          if (!searchResponse.ok) {
-            console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
-            continue;
+          // Variables para paginar la búsqueda de IDs
+          let offset = 0;
+          let totalItems = Infinity;
+          let allItemIds = [];
+
+          // Realizamos peticiones mientras queden ítems por obtener
+          while (offset < totalItems) {
+            const searchResponse = await fetch(
+              `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}`
+            );
+            if (!searchResponse.ok) {
+              console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
+              break;
+            }
+
+            const searchData = await searchResponse.json();
+            // Acumular los IDs obtenidos
+            allItemIds = [...allItemIds, ...searchData.results];
+            totalItems = searchData.paging?.total || allItemIds.length;
+            // Incrementamos el offset según el límite retornado en la respuesta (por defecto suele ser 50)
+            offset += searchData.paging?.limit || 50;
           }
 
-          const searchData = await searchResponse.json();
-          const itemIds = searchData.results || [];
+          // Si no se obtuvieron ítems, continuar con la siguiente cuenta
+          if (allItemIds.length === 0) continue;
 
-          if (itemIds.length === 0) continue;
-
-          // Procesar en lotes de 20
+          // Procesar en lotes para no saturar la API de detalles
           const batchSize = 20;
-          for (let i = 0; i < itemIds.length; i += batchSize) {
-            const batchIds = itemIds.slice(i, i + batchSize).join(",");
+          for (let i = 0; i < allItemIds.length; i += batchSize) {
+            const batchIds = allItemIds.slice(i, i + batchSize).join(",");
             const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
             const itemsResponse = await fetch(itemsUrl);
 
@@ -72,7 +84,7 @@ const Publicaciones = () => {
             const validItems = itemsData
               .filter((item) => item.code === 200)
               .map((item) => ({
-                ...item.body, // id, title, price, thumbnail, status, etc.
+                ...item.body, // Contiene id, title, price, thumbnail, status, etc.
                 userNickname: nickname,
               }));
 
@@ -84,7 +96,7 @@ const Publicaciones = () => {
       }
 
       setPublicaciones(todasLasPublicaciones);
-      setPaginaActual(1); // Reinicia la página al actualizar las publicaciones
+      setPaginaActual(1); // Reiniciamos la página al actualizar
     };
 
     if (cuentas.length > 0) {
@@ -108,7 +120,7 @@ const Publicaciones = () => {
     return matchTitulo && matchID && matchEstado && matchCuenta;
   });
 
-  // 5. Paginación
+  // 5. Paginación de las publicaciones filtradas
   const totalPaginas = Math.ceil(publicacionesFiltradas.length / itemsPorPagina);
   const inicio = (paginaActual - 1) * itemsPorPagina;
   const publicacionesPagina = publicacionesFiltradas.slice(inicio, inicio + itemsPorPagina);
@@ -129,10 +141,19 @@ const Publicaciones = () => {
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
-      <p><strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}</p>
+      <p>
+        <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
+      </p>
 
       {/* Filtros */}
-      <div style={{ marginBottom: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
+      <div
+        style={{
+          marginBottom: "20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px"
+        }}
+      >
         <input
           type="text"
           placeholder="Buscar por título..."
@@ -199,7 +220,7 @@ const Publicaciones = () => {
                 borderRadius: "4px",
                 display: "flex",
                 alignItems: "flex-start",
-                gap: "10px",
+                gap: "10px"
               }}
             >
               <img
@@ -228,14 +249,28 @@ const Publicaciones = () => {
       )}
 
       {/* Navegación de páginas */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button onClick={paginaAnterior} disabled={paginaActual === 1} style={{ padding: "8px 12px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}
+      >
+        <button
+          onClick={paginaAnterior}
+          disabled={paginaActual === 1}
+          style={{ padding: "8px 12px" }}
+        >
           Anterior
         </button>
         <span>
           Página {paginaActual} de {totalPaginas}
         </span>
-        <button onClick={paginaSiguiente} disabled={paginaActual === totalPaginas} style={{ padding: "8px 12px" }}>
+        <button
+          onClick={paginaSiguiente}
+          disabled={paginaActual === totalPaginas}
+          style={{ padding: "8px 12px" }}
+        >
           Siguiente
         </button>
       </div>
