@@ -33,14 +33,17 @@ const Publicaciones = () => {
         const userId = cuenta.profile?.id;
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
 
-        if (!accessToken || !userId) continue;
+        if (!accessToken || !userId) continue; // Si faltan datos, salta la cuenta
 
         try {
           let allItemIds = [];
           let offset = 0;
           let total = Infinity;
+          // Límite máximo de offset (según la documentación, puede ser 1000 o lo que indique MercadoLibre)
+          const MAX_OFFSET = 1000; 
+
           // Obtener todos los IDs paginando
-          while (offset < total) {
+          while (offset < total && offset < MAX_OFFSET) {
             const searchResponse = await fetch(
               `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}`
             );
@@ -55,12 +58,13 @@ const Publicaciones = () => {
             const nuevosIds = searchData.results || [];
             allItemIds = [...allItemIds, ...nuevosIds];
             offset += nuevosIds.length;
+            // Si no se reciben nuevos resultados, salimos del bucle
             if (nuevosIds.length === 0) break;
           }
 
-          if (allItemIds.length === 0) continue;
+          if (allItemIds.length === 0) continue; // Si no hay ítems, pasar a la siguiente cuenta
 
-          // Procesar en lotes de 20
+          // Procesar los IDs en lotes de 20
           const batchSize = 20;
           for (let i = 0; i < allItemIds.length; i += batchSize) {
             const batchIds = allItemIds.slice(i, i + batchSize).join(",");
@@ -72,8 +76,10 @@ const Publicaciones = () => {
               continue;
             }
 
+            // La respuesta es un arreglo de objetos: [{ code, body: { ...itemData }}, ...]
             const itemsData = await itemsResponse.json();
 
+            // Filtrar los resultados válidos y agregar el nickname
             const validItems = itemsData
               .filter((item) => item.code === 200)
               .map((item) => ({
@@ -87,7 +93,6 @@ const Publicaciones = () => {
           console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
       }
-
       setPublicaciones(todasLasPublicaciones);
     };
 
@@ -96,7 +101,7 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // Memorizar publicaciones filtradas para evitar recálculos innecesarios
+  // 3. Filtrar publicaciones según el texto ingresado y el filtro activo
   const publicacionesFiltradas = useMemo(() => {
     return publicaciones.filter((item) => {
       const valor =
@@ -111,7 +116,7 @@ const Publicaciones = () => {
     });
   }, [publicaciones, busqueda, filterType]);
 
-  // Reiniciar la página solo cuando la búsqueda o el filtro cambien
+  // Reiniciar la página actual solo cuando cambie la búsqueda o el filtro
   useEffect(() => {
     setCurrentPage(1);
   }, [busqueda, filterType]);
@@ -223,6 +228,7 @@ const Publicaciones = () => {
             ))}
           </ul>
 
+          {/* Paginación: Botones "Anterior" y "Siguiente" */}
           <div
             style={{
               display: "flex",
