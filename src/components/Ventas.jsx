@@ -20,25 +20,22 @@ const Ventas = () => {
     return () => unsub();
   }, []);
 
-  // Para cada cuenta conectada se solicita las órdenes usando el endpoint /orders/search
+  // Para cada cuenta conectada se solicita las órdenes usando el endpoint proxy
   useEffect(() => {
     const fetchOrders = async () => {
       setLoading(true);
       let allOrders = [];
-      // Iterar sobre cada cuenta conectada
+
       for (const account of accounts) {
         const token = account.token?.access_token;
-        // Se asume que el id del vendedor viene en profile.id
         const sellerId = account.profile?.id;
+
         if (token && sellerId) {
           try {
-            // Filtramos las órdenes con status "paid" (puedes modificar o agregar filtros)
-            const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.status=paid`;
-            const response = await fetch(url, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            });
+            // Llamada al endpoint proxy en Vercel
+            const proxyUrl = `/api/proxy?seller=${sellerId}&token=${token}`;
+            const response = await fetch(proxyUrl);
+            
             if (response.ok) {
               const data = await response.json();
               if (data.results) {
@@ -55,6 +52,7 @@ const Ventas = () => {
           }
         }
       }
+
       setOrders(allOrders);
       setLoading(false);
     };
