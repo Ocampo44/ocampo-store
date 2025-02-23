@@ -97,7 +97,13 @@ const Publicaciones = () => {
           console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
       }
-      setPublicaciones(todasLasPublicaciones);
+      
+      // Filtrar duplicados basados en el ID de la publicación
+      const publicacionesUnicas = todasLasPublicaciones.filter(
+        (pub, index, self) =>
+          index === self.findIndex((p) => p.id === pub.id)
+      );
+      setPublicaciones(publicacionesUnicas);
       setCurrentPage(1); // Reinicia la página cuando se actualizan las publicaciones
     };
 
