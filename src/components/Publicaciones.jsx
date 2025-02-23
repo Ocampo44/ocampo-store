@@ -7,6 +7,10 @@ const Publicaciones = () => {
   const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState([]);
   const [busqueda, setBusqueda] = useState("");
+  
+  // Para la paginación en la interfaz
+  const [currentPage, setCurrentPage] = useState(0); 
+  const pageSize = 20; // Cantidad de publicaciones por página en la UI
 
   // 1. Escuchar cambios en Firestore para obtener las cuentas con token
   useEffect(() => {
@@ -20,8 +24,67 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Para cada cuenta, obtener los IDs de sus publicaciones,
-  //    luego obtener el detalle de cada publicación y guardarlo en "publicaciones".
+  // Función auxiliar para obtener **todas** las IDs de publicaciones de un usuario, paginando
+  const fetchAllItemIDs = async (userId, accessToken) => {
+    let offset = 0;
+    const limit = 50;
+    let allItemIds = [];
+
+    while (true) {
+      const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}&access_token=${accessToken}`;
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        console.error("Error al obtener IDs de publicaciones:", resp.status);
+        break;
+      }
+      const data = await resp.json();
+      const itemIds = data.results || [];
+      allItemIds = [...allItemIds, ...itemIds];
+
+      offset += limit;
+      // Si ya alcanzamos o pasamos el total, salimos
+      if (offset >= data.paging.total) {
+        break;
+      }
+    }
+
+    return allItemIds;
+  };
+
+  // Función auxiliar para obtener los detalles de ítems en lotes de 20
+  const fetchItemDetailsInBatches = async (itemIds, accessToken, nickname) => {
+    const batchSize = 20;
+    let allDetails = [];
+
+    for (let i = 0; i < itemIds.length; i += batchSize) {
+      const batchIds = itemIds.slice(i, i + batchSize).join(",");
+      const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
+      const itemsResponse = await fetch(itemsUrl);
+
+      if (!itemsResponse.ok) {
+        console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
+        continue;
+      }
+
+      // Retorna un array: [{ code: 200, body: { ...itemData }}, ...]
+      const itemsData = await itemsResponse.json();
+
+      // Filtramos solo los que tienen code=200 (peticiones exitosas)
+      const validItems = itemsData
+        .filter((item) => item.code === 200)
+        .map((item) => ({
+          ...item.body,             // Incluye id, title, price, status, thumbnail, etc.
+          userNickname: nickname,   // Agregamos el nickname de la cuenta
+        }));
+
+      allDetails = [...allDetails, ...validItems];
+    }
+
+    return allDetails;
+  };
+
+  // 2. Para cada cuenta, obtener TODAS las IDs (paginando), 
+  //    luego el detalle de cada ítem y guardarlo en "publicaciones".
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let todasLasPublicaciones = [];
@@ -34,56 +97,23 @@ const Publicaciones = () => {
         if (!accessToken || !userId) continue; // si faltan datos, pasar a la siguiente cuenta
 
         try {
-          // Primero, obtener los IDs de las publicaciones
-          const searchResponse = await fetch(
-            `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}`
-          );
-          if (!searchResponse.ok) {
-            console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
-            continue;
-          }
+          // 2a. Obtener TODAS las IDs de las publicaciones, paginando de 50 en 50
+          const allItemIds = await fetchAllItemIDs(userId, accessToken);
 
-          const searchData = await searchResponse.json();
-          const itemIds = searchData.results || []; // Array de IDs de ítems
+          if (allItemIds.length === 0) continue;
 
-          // Si no hay ítems, pasamos a la siguiente cuenta
-          if (itemIds.length === 0) continue;
+          // 2b. Obtener los detalles de todos esos ítems en lotes de 20
+          const detalles = await fetchItemDetailsInBatches(allItemIds, accessToken, nickname);
 
-          // Usamos batch de 20 en 20 para no saturar la API
-          const batchSize = 20;
-          for (let i = 0; i < itemIds.length; i += batchSize) {
-            const batchIds = itemIds.slice(i, i + batchSize).join(",");
-            const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
-            const itemsResponse = await fetch(itemsUrl);
-
-            if (!itemsResponse.ok) {
-              console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
-              continue;
-            }
-
-            // itemsResponse.json() retorna un array: [{ code, body: { ...itemData }}, ...]
-            const itemsData = await itemsResponse.json();
-
-            // Filtramos solo los que tienen code=200 (peticiones exitosas)
-            const validItems = itemsData
-              .filter((item) => item.code === 200)
-              .map((item) => {
-                // Agregamos nickname al objeto body
-                return {
-                  ...item.body, // Contiene id, title, price, thumbnail, status, etc.
-                  userNickname: nickname,
-                };
-              });
-
-            // Agregamos estos ítems al array general
-            todasLasPublicaciones = [...todasLasPublicaciones, ...validItems];
-          }
+          // Agregamos estos ítems al array general
+          todasLasPublicaciones = [...todasLasPublicaciones, ...detalles];
         } catch (error) {
           console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
       }
 
       setPublicaciones(todasLasPublicaciones);
+      setCurrentPage(0); // resetear la página a 0 cada vez que se recarga la data
     };
 
     if (cuentas.length > 0) {
@@ -91,31 +121,54 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // 3. Filtrar publicaciones según el texto ingresado
+  // 3. Filtrar las publicaciones según el texto ingresado
   const publicacionesFiltradas = publicaciones.filter((item) => {
     const titulo = item.title?.toLowerCase() || "";
     return titulo.includes(busqueda.toLowerCase());
   });
 
+  // 4. Paginación en la UI
+  const totalPages = Math.ceil(publicacionesFiltradas.length / pageSize);
+  const startIndex = currentPage * pageSize;
+  const endIndex = startIndex + pageSize;
+  const publicacionesEnPagina = publicacionesFiltradas.slice(startIndex, endIndex);
+
+  const handlePrevPage = () => {
+    if (currentPage > 0) {
+      setCurrentPage((prev) => prev - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages - 1) {
+      setCurrentPage((prev) => prev + 1);
+    }
+  };
+
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
 
+      {/* Buscador */}
       <div style={{ marginBottom: "10px" }}>
         <input
           type="text"
           placeholder="Buscar ítems..."
           value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
+          onChange={(e) => {
+            setBusqueda(e.target.value);
+            setCurrentPage(0); // Volver a la primera página si se cambia el filtro
+          }}
           style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
         />
       </div>
 
-      {publicacionesFiltradas.length === 0 ? (
+      {/* Lista paginada */}
+      {publicacionesEnPagina.length === 0 ? (
         <p>No se encontraron publicaciones.</p>
       ) : (
         <ul style={{ listStyle: "none", padding: 0 }}>
-          {publicacionesFiltradas.map((pub) => (
+          {publicacionesEnPagina.map((pub) => (
             <li
               key={pub.id}
               style={{
@@ -155,6 +208,19 @@ const Publicaciones = () => {
           ))}
         </ul>
       )}
+
+      {/* Controles de paginación */}
+      <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "20px" }}>
+        <button onClick={handlePrevPage} disabled={currentPage === 0}>
+          Anterior
+        </button>
+        <span>
+          Página {currentPage + 1} de {totalPages}
+        </span>
+        <button onClick={handleNextPage} disabled={currentPage === totalPages - 1}>
+          Siguiente
+        </button>
+      </div>
     </div>
   );
 };
