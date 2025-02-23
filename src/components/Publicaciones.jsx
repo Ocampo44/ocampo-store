@@ -133,24 +133,28 @@ const Publicaciones = () => {
   const fetchAllItemIds = async (userId, accessToken) => {
     let allIds = [];
     let scrollId = null;
-    let url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan`;
-
-    do {
-      if (scrollId) {
-        url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan&scroll_id=${scrollId}`;
-      }
-      const response = await fetch(url);
-      if (!response.ok) {
-        console.error("Error al obtener publicaciones en modo scan:", response.status);
-        break;
-      }
-      const data = await response.json();
-      if (data.results && Array.isArray(data.results)) {
-        allIds = [...allIds, ...data.results];
-      }
-      scrollId = data.scroll_id;
-    } while (scrollId);
-
+    try {
+      do {
+        let url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan`;
+        if (scrollId) {
+          url += `&scroll_id=${scrollId}`;
+        }
+        const response = await fetch(url);
+        if (!response.ok) {
+          console.error("Error al obtener publicaciones en modo scan:", response.status);
+          break;
+        }
+        const data = await response.json();
+        if (data.results && Array.isArray(data.results)) {
+          allIds = allIds.concat(data.results);
+        } else {
+          console.warn("No se encontraron 'results' en la respuesta:", data);
+        }
+        scrollId = data.scroll_id;
+      } while (scrollId);
+    } catch (error) {
+      console.error("Error en fetchAllItemIds:", error);
+    }
     return allIds;
   };
 
@@ -168,7 +172,7 @@ const Publicaciones = () => {
 
         try {
           const itemIds = await fetchAllItemIds(userId, accessToken);
-          if (itemIds.length === 0) continue;
+          if (!itemIds.length) continue;
 
           const batchSize = 20;
           for (let i = 0; i < itemIds.length; i += batchSize) {
@@ -184,13 +188,13 @@ const Publicaciones = () => {
             const itemsData = await itemsResponse.json();
 
             const validItems = itemsData
-              .filter((item) => item.code === 200)
+              .filter((item) => item.code === 200 && item.body)
               .map((item) => ({
                 ...item.body,
                 userNickname: nickname,
               }));
 
-            todasLasPublicaciones = [...todasLasPublicaciones, ...validItems];
+            todasLasPublicaciones = todasLasPublicaciones.concat(validItems);
           }
         } catch (error) {
           console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
@@ -203,14 +207,13 @@ const Publicaciones = () => {
       );
 
       // Guarda cada publicación en Firestore
-      publicacionesUnicas.forEach(async (pub) => {
+      for (const pub of publicacionesUnicas) {
         try {
           await setDoc(doc(db, "publicaciones", pub.id.toString()), pub, { merge: true });
         } catch (error) {
           console.error("Error al guardar la publicación con id:", pub.id, error);
         }
-      });
-      // El listener en Firestore actualizará el estado, por lo que no es necesario llamar a setPublicaciones aquí.
+      }
       setCurrentPage(1);
     };
 
@@ -227,8 +230,7 @@ const Publicaciones = () => {
       const filtroTitulo = titulo.includes(busquedaTitulo.toLowerCase());
       const filtroId = busquedaId.trim() === "" || idPublicacion.includes(busquedaId);
       const filtroStatus = selectedStatus === "Todos" || item.status === selectedStatus;
-      const filtroCuenta =
-        selectedCuenta === "Todas" || item.userNickname === selectedCuenta;
+      const filtroCuenta = selectedCuenta === "Todas" || item.userNickname === selectedCuenta;
       return filtroTitulo && filtroId && filtroStatus && filtroCuenta;
     });
   }, [publicaciones, busquedaTitulo, busquedaId, selectedStatus, selectedCuenta]);
@@ -249,7 +251,9 @@ const Publicaciones = () => {
 
   // Dropdown de cuentas disponibles
   const cuentasDisponibles = useMemo(() => {
-    const nombres = cuentas.map((cuenta) => cuenta.profile?.nickname || "Sin Nombre");
+    const nombres = cuentas.map(
+      (cuenta) => cuenta.profile?.nickname || "Sin Nombre"
+    );
     return ["Todas", ...Array.from(new Set(nombres))];
   }, [cuentas]);
 
