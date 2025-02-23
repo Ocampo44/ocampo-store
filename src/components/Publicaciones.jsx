@@ -1,22 +1,25 @@
 // src/components/Publicaciones.jsx
 import React, { useState, useEffect } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, setDoc, doc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
 const Publicaciones = () => {
+  // Estado para las cuentas conectadas (mercadolibreUsers)
   const [cuentas, setCuentas] = useState([]);
+  // Estado para las publicaciones cacheadas en Firestore
   const [publicaciones, setPublicaciones] = useState([]);
+  // Estado para el buscador
   const [busqueda, setBusqueda] = useState("");
 
-  // Variables para filtrar por fecha (puedes usar inputs tipo "date")
-  const [desde, setDesde] = useState(""); // Ej: "2021-01-01"
-  const [hasta, setHasta] = useState(""); // Ej: "2021-12-31"
+  // Estados opcionales para filtrar por fecha (si deseas segmentar la consulta)
+  const [desde, setDesde] = useState(""); // Ejemplo: "2021-01-01"
+  const [hasta, setHasta] = useState(""); // Ejemplo: "2021-12-31"
 
-  // Variables para la paginación en la UI
+  // Para paginación en la UI
   const [currentPage, setCurrentPage] = useState(0);
-  const pageSize = 20; // Cantidad de publicaciones por página
+  const pageSize = 20; // Cantidad de publicaciones mostradas por página
 
-  // 1. Escuchar los cambios en Firestore para obtener las cuentas conectadas
+  // 1. Suscripción a la colección de cuentas de MercadoLibre
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const cuentasTemp = snapshot.docs.map((doc) => ({
@@ -28,18 +31,25 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para obtener todas las IDs de publicaciones de un usuario, paginando
+  // 2. Suscripción a la colección "publicaciones" (cacheadas)
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "publicaciones"), (snapshot) => {
+      const pubs = snapshot.docs.map((doc) => doc.data());
+      setPublicaciones(pubs);
+    });
+    return () => unsub();
+  }, []);
+
+  // Función para obtener todas las IDs de publicaciones de un usuario (paginar)
   const fetchAllItemIDs = async (userId, accessToken, desde, hasta) => {
     let offset = 0;
     const limit = 50;
     let allItemIds = [];
-    // Si se establecen fechas, se asume que el endpoint acepta un filtro de fecha.
-    // Revisa la documentación de MercadoLibre para conocer el parámetro exacto y formato.
+    // Si se establecen fechas, se asume que el endpoint acepta un filtro (ver documentación)
     let dateFilter = "";
     if (desde && hasta) {
       dateFilter = `&date_created=${desde},${hasta}`;
     }
-
     while (true) {
       const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}&access_token=${accessToken}${dateFilter}`;
       const resp = await fetch(url);
@@ -56,8 +66,8 @@ const Publicaciones = () => {
     return allItemIds;
   };
 
-  // Función para obtener el detalle de los ítems en lotes de 20
-  const fetchItemDetailsInBatches = async (itemIds, accessToken, nickname) => {
+  // Función para obtener el detalle de los ítems en lotes (batch de 20)
+  const fetchItemDetailsInBatches = async (itemIds, accessToken, nickname, userId) => {
     const batchSize = 20;
     let allDetails = [];
     for (let i = 0; i < itemIds.length; i += batchSize) {
@@ -68,23 +78,23 @@ const Publicaciones = () => {
         console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
         continue;
       }
-      // La respuesta es un array: [{ code: 200, body: { ...itemData } }, ...]
+      // La respuesta es un array: [{ code, body: { ...itemData } }, ...]
       const itemsData = await itemsResponse.json();
       const validItems = itemsData
         .filter((item) => item.code === 200)
         .map((item) => ({
-          ...item.body,             // Contiene id, title, price, status, thumbnail, etc.
-          userNickname: nickname,   // Agrega el nickname de la cuenta
+          ...item.body,             // Incluye id, title, price, status, thumbnail, etc.
+          userNickname: nickname,   // Agregamos el nickname de la cuenta
+          accountId: userId,        // Puedes guardar también el ID de la cuenta
         }));
       allDetails = [...allDetails, ...validItems];
     }
     return allDetails;
   };
 
-  // 2. Para cada cuenta, obtener TODAS las IDs (paginar en la API) y luego sus detalles
+  // 3. Actualización en segundo plano: Buscar nuevas publicaciones en MercadoLibre y actualizar Firestore
   useEffect(() => {
-    const fetchPublicaciones = async () => {
-      let todasLasPublicaciones = [];
+    const updatePublicacionesFromML = async () => {
       for (const cuenta of cuentas) {
         const accessToken = cuenta.token?.access_token;
         const userId = cuenta.profile?.id;
@@ -92,32 +102,34 @@ const Publicaciones = () => {
         if (!accessToken || !userId) continue;
 
         try {
-          // Obtener todas las IDs de publicaciones para la cuenta
+          // Se obtienen todas las IDs (según lo permitido por la API)
           const allItemIds = await fetchAllItemIDs(userId, accessToken, desde, hasta);
           if (allItemIds.length === 0) continue;
-          // Obtener los detalles de los ítems en lotes
-          const detalles = await fetchItemDetailsInBatches(allItemIds, accessToken, nickname);
-          todasLasPublicaciones = [...todasLasPublicaciones, ...detalles];
+          // Se obtienen los detalles de los ítems en lotes
+          const detalles = await fetchItemDetailsInBatches(allItemIds, accessToken, nickname, userId);
+          // Se actualiza cada publicación en Firestore (si ya existe, se actualiza; si no, se crea)
+          for (const pub of detalles) {
+            await setDoc(doc(db, "publicaciones", pub.id), pub, { merge: true });
+          }
         } catch (error) {
-          console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
+          console.error("Error actualizando publicaciones para la cuenta:", cuenta.id, error);
         }
       }
-      setPublicaciones(todasLasPublicaciones);
-      setCurrentPage(0); // Resetear la página cada vez que se recarga la data
     };
 
     if (cuentas.length > 0) {
-      fetchPublicaciones();
+      // Ejecuta la actualización en segundo plano
+      updatePublicacionesFromML();
     }
   }, [cuentas, desde, hasta]);
 
-  // 3. Filtrar las publicaciones según el texto ingresado
+  // 4. Filtrado de publicaciones según el texto ingresado
   const publicacionesFiltradas = publicaciones.filter((item) => {
     const titulo = item.title?.toLowerCase() || "";
     return titulo.includes(busqueda.toLowerCase());
   });
 
-  // 4. Paginación en la UI
+  // 5. Paginación en la interfaz
   const totalPages = Math.ceil(publicacionesFiltradas.length / pageSize);
   const startIndex = currentPage * pageSize;
   const endIndex = startIndex + pageSize;
@@ -149,7 +161,7 @@ const Publicaciones = () => {
         />
       </div>
 
-      {/* Filtros por fecha */}
+      {/* Filtros por fecha (opcional) */}
       <div style={{ marginBottom: "10px" }}>
         <label>
           Desde:{" "}
@@ -167,10 +179,9 @@ const Publicaciones = () => {
             onChange={(e) => setHasta(e.target.value)}
           />
         </label>
-        {/* Puedes agregar un botón para "Filtrar" si lo deseas, o disparar el useEffect al cambiar estas variables */}
       </div>
 
-      {/* Lista paginada */}
+      {/* Lista de publicaciones (obtenidas de Firestore) con paginación */}
       {publicacionesEnPagina.length === 0 ? (
         <p>No se encontraron publicaciones.</p>
       ) : (
@@ -202,7 +213,7 @@ const Publicaciones = () => {
                   <strong>Cuenta:</strong> {pub.userNickname}
                 </p>
                 <p style={{ margin: 0 }}>
-                  <strong>ID de la publicación:</strong> {pub.id}
+                  <strong>ID:</strong> {pub.id}
                 </p>
                 <p style={{ margin: 0 }}>
                   <strong>Estado:</strong> {pub.status}
@@ -213,7 +224,7 @@ const Publicaciones = () => {
         </ul>
       )}
 
-      {/* Controles de paginación en la UI */}
+      {/* Controles de paginación */}
       <div
         style={{
           display: "flex",
