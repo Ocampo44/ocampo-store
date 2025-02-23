@@ -5,6 +5,13 @@ import { db } from "../firebaseConfig";
 const Publicaciones = () => {
   const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState([]);
+
+  // Estados de filtros
+  const [filtroCuenta, setFiltroCuenta] = useState(""); // Filtro por cuenta
+  const [filtroTitulo, setFiltroTitulo] = useState(""); // Filtro por título
+  const [filtroEstado, setFiltroEstado] = useState(""); // Filtro por estado
+  const [filtroID, setFiltroID] = useState(""); // Filtro por ID
+
   const [cargando, setCargando] = useState(false);
 
   useEffect(() => {
@@ -24,6 +31,8 @@ const Publicaciones = () => {
       setPublicaciones([]);
 
       for (const cuenta of cuentas) {
+        if (filtroCuenta && cuenta.profile?.nickname !== filtroCuenta) continue;
+
         const accessToken = cuenta.token?.access_token;
         const userId = cuenta.profile?.id;
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
@@ -38,9 +47,11 @@ const Publicaciones = () => {
             "2000-5000", "5000-10000", "10000-"
           ];
 
-          let publicacionesTemp = new Map(); // Mapa para evitar duplicados
+          let publicacionesTemp = new Map();
 
           for (const estado of estados) {
+            if (filtroEstado && estado !== filtroEstado) continue;
+
             for (const precio of rangosPrecio) {
               let offset = 0;
               let totalItems = Infinity;
@@ -87,7 +98,6 @@ const Publicaciones = () => {
                       userNickname: nickname,
                     }));
 
-                  // Agregar al mapa para evitar duplicados
                   for (const item of validItems) {
                     publicacionesTemp.set(item.id, item);
                   }
@@ -99,8 +109,6 @@ const Publicaciones = () => {
           }
 
           console.log(`✅ Se trajeron ${publicacionesTemp.size} publicaciones para ${nickname}`);
-          
-          // Convertir Map a array y actualizar estado sin duplicados
           setPublicaciones((prev) => [...prev, ...Array.from(publicacionesTemp.values())]);
         } catch (error) {
           console.error("❌ Error al traer publicaciones para la cuenta:", cuenta.id, error);
@@ -112,25 +120,73 @@ const Publicaciones = () => {
     if (cuentas.length > 0) {
       fetchPublicaciones();
     }
-  }, [cuentas]);
+  }, [cuentas, filtroCuenta, filtroEstado]);
+
+  // Filtrar publicaciones por título y ID
+  const publicacionesFiltradas = publicaciones.filter((pub) => {
+    const matchTitulo = filtroTitulo ? pub.title.toLowerCase().includes(filtroTitulo.toLowerCase()) : true;
+    const matchID = filtroID ? pub.id.includes(filtroID) : true;
+    return matchTitulo && matchID;
+  });
 
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
+
+      {/* Filtros */}
+      <div style={{ marginBottom: "20px", display: "flex", flexWrap: "wrap", gap: "10px" }}>
+        {/* Filtro por cuenta */}
+        <select value={filtroCuenta} onChange={(e) => setFiltroCuenta(e.target.value)} style={{ padding: "6px" }}>
+          <option value="">Todas las cuentas</option>
+          {cuentas.map((cuenta) => (
+            <option key={cuenta.id} value={cuenta.profile?.nickname}>
+              {cuenta.profile?.nickname || "Sin Nombre"}
+            </option>
+          ))}
+        </select>
+
+        {/* Filtro por título */}
+        <input
+          type="text"
+          placeholder="Buscar por título..."
+          value={filtroTitulo}
+          onChange={(e) => setFiltroTitulo(e.target.value)}
+          style={{ padding: "8px", maxWidth: "200px" }}
+        />
+
+        {/* Filtro por estado */}
+        <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} style={{ padding: "6px" }}>
+          <option value="">Todos los estados</option>
+          <option value="active">Activo</option>
+          <option value="paused">Pausado</option>
+          <option value="closed">Cerrado</option>
+        </select>
+
+        {/* Filtro por ID */}
+        <input
+          type="text"
+          placeholder="Buscar por ID..."
+          value={filtroID}
+          onChange={(e) => setFiltroID(e.target.value)}
+          style={{ padding: "8px", maxWidth: "200px" }}
+        />
+      </div>
+
       <p>
-        <strong>Total de publicaciones:</strong> {publicaciones.length}
+        <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
       </p>
 
       {cargando && <p>Cargando publicaciones...</p>}
 
-      {publicaciones.length === 0 && !cargando ? (
+      {publicacionesFiltradas.length === 0 && !cargando ? (
         <p>No se encontraron publicaciones.</p>
       ) : (
         <ul>
-          {publicaciones.map((pub) => (
+          {publicacionesFiltradas.map((pub) => (
             <li key={pub.id}>
               <h3>{pub.title}</h3>
               <p><strong>Cuenta:</strong> {pub.userNickname}</p>
+              <p><strong>Estado:</strong> {pub.status}</p>
               <p><strong>Precio:</strong> {pub.price}</p>
             </li>
           ))}
