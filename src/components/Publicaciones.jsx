@@ -4,16 +4,17 @@ import { db } from "../firebaseConfig";
 
 const Publicaciones = () => {
   const [cuentas, setCuentas] = useState([]);
-  const [publicaciones, setPublicaciones] = useState([]);
+  const [publicaciones, setPublicaciones] = useState(new Map()); // Usar Map para evitar duplicados
 
   // Estados de filtros
-  const [filtroCuenta, setFiltroCuenta] = useState(""); // Filtro por cuenta
-  const [filtroTitulo, setFiltroTitulo] = useState(""); // Filtro por título
-  const [filtroEstado, setFiltroEstado] = useState(""); // Filtro por estado
-  const [filtroID, setFiltroID] = useState(""); // Filtro por ID
+  const [filtroCuenta, setFiltroCuenta] = useState(""); 
+  const [filtroTitulo, setFiltroTitulo] = useState(""); 
+  const [filtroEstado, setFiltroEstado] = useState(""); 
+  const [filtroID, setFiltroID] = useState(""); 
 
   const [cargando, setCargando] = useState(false);
 
+  // 🔹 Cargar cuentas de Firestore (en tiempo real)
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const cuentasTemp = snapshot.docs.map((doc) => ({
@@ -25,14 +26,15 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
+  // 🔹 Cargar publicaciones en tiempo real
   useEffect(() => {
+    if (cuentas.length === 0) return;
+
     const fetchPublicaciones = async () => {
       setCargando(true);
-      setPublicaciones([]);
+      let tempPublicaciones = new Map(publicaciones); // Mantener publicaciones previas
 
       for (const cuenta of cuentas) {
-        if (filtroCuenta && cuenta.profile?.nickname !== filtroCuenta) continue;
-
         const accessToken = cuenta.token?.access_token;
         const userId = cuenta.profile?.id;
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
@@ -47,32 +49,20 @@ const Publicaciones = () => {
             "2000-5000", "5000-10000", "10000-"
           ];
 
-          let publicacionesTemp = new Map();
-
           for (const estado of estados) {
-            if (filtroEstado && estado !== filtroEstado) continue;
-
             for (const precio of rangosPrecio) {
               let offset = 0;
               let totalItems = Infinity;
 
-              console.log(`🔍 Buscando publicaciones (${estado}, ${precio}) para ${nickname}...`);
-
               while (offset < totalItems) {
                 const searchUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=${estado}&price=${precio}&offset=${offset}&limit=50`;
 
-                console.log(`➡️ Fetching: ${searchUrl}`);
                 const searchResponse = await fetch(searchUrl);
-                if (!searchResponse.ok) {
-                  console.error(`⚠️ Error al obtener IDs (${estado}, ${precio}):`, searchResponse.status);
-                  break;
-                }
+                if (!searchResponse.ok) break;
 
                 const searchData = await searchResponse.json();
                 const itemIds = searchData.results || [];
                 totalItems = searchData.paging?.total || itemIds.length;
-
-                console.log(`📌 Total Items en ML (${estado}, ${precio}): ${totalItems}, Offset: ${offset}`);
 
                 if (itemIds.length === 0) break;
                 offset += searchData.paging?.limit || 50;
@@ -83,12 +73,8 @@ const Publicaciones = () => {
                   const batchIds = itemIds.slice(i, i + batchSize).join(",");
                   const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
 
-                  console.log(`📦 Obteniendo detalles: ${itemsUrl}`);
                   const itemsResponse = await fetch(itemsUrl);
-                  if (!itemsResponse.ok) {
-                    console.error("⚠️ Error al obtener detalles de publicaciones:", itemsResponse.status);
-                    continue;
-                  }
+                  if (!itemsResponse.ok) continue;
 
                   const itemsData = await itemsResponse.json();
                   const validItems = itemsData
@@ -99,17 +85,18 @@ const Publicaciones = () => {
                     }));
 
                   for (const item of validItems) {
-                    publicacionesTemp.set(item.id, item);
+                    tempPublicaciones.set(item.id, item);
                   }
+
+                  // 🔥 Actualizar estado en tiempo real 🔥
+                  setPublicaciones(new Map(tempPublicaciones));
                 }
 
-                await new Promise((r) => setTimeout(r, 500));
+                await new Promise((r) => setTimeout(r, 500)); // Evitar bloqueos
               }
             }
           }
 
-          console.log(`✅ Se trajeron ${publicacionesTemp.size} publicaciones para ${nickname}`);
-          setPublicaciones((prev) => [...prev, ...Array.from(publicacionesTemp.values())]);
         } catch (error) {
           console.error("❌ Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
@@ -117,16 +104,16 @@ const Publicaciones = () => {
       setCargando(false);
     };
 
-    if (cuentas.length > 0) {
-      fetchPublicaciones();
-    }
-  }, [cuentas, filtroCuenta, filtroEstado]);
+    fetchPublicaciones();
+  }, [cuentas]); // Solo ejecuta cuando cambian las cuentas
 
-  // Filtrar publicaciones por título y ID
-  const publicacionesFiltradas = publicaciones.filter((pub) => {
+  // 🔹 Aplicar filtros en tiempo real
+  const publicacionesArray = Array.from(publicaciones.values()).filter((pub) => {
+    const matchCuenta = filtroCuenta ? pub.userNickname === filtroCuenta : true;
     const matchTitulo = filtroTitulo ? pub.title.toLowerCase().includes(filtroTitulo.toLowerCase()) : true;
+    const matchEstado = filtroEstado ? pub.status === filtroEstado : true;
     const matchID = filtroID ? pub.id.includes(filtroID) : true;
-    return matchTitulo && matchID;
+    return matchCuenta && matchTitulo && matchEstado && matchID;
   });
 
   return (
@@ -173,16 +160,16 @@ const Publicaciones = () => {
       </div>
 
       <p>
-        <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
+        <strong>Total de publicaciones:</strong> {publicacionesArray.length}
       </p>
 
       {cargando && <p>Cargando publicaciones...</p>}
 
-      {publicacionesFiltradas.length === 0 && !cargando ? (
+      {publicacionesArray.length === 0 && !cargando ? (
         <p>No se encontraron publicaciones.</p>
       ) : (
         <ul>
-          {publicacionesFiltradas.map((pub) => (
+          {publicacionesArray.map((pub) => (
             <li key={pub.id}>
               <h3>{pub.title}</h3>
               <p><strong>Cuenta:</strong> {pub.userNickname}</p>
