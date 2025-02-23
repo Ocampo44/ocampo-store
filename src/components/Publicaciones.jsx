@@ -36,7 +36,7 @@ const Publicaciones = () => {
         try {
           // Primero, obtener los IDs de las publicaciones
           const searchResponse = await fetch(
-            https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}
+            `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}`
           );
           if (!searchResponse.ok) {
             console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
@@ -53,7 +53,7 @@ const Publicaciones = () => {
           const batchSize = 20;
           for (let i = 0; i < itemIds.length; i += batchSize) {
             const batchIds = itemIds.slice(i, i + batchSize).join(",");
-            const itemsUrl = https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken};
+            const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
             const itemsResponse = await fetch(itemsUrl);
 
             if (!itemsResponse.ok) {
