@@ -11,7 +11,7 @@ const Publicaciones = () => {
   // Estado para el buscador general (por nombre)
   const [busqueda, setBusqueda] = useState("");
   
-  // Estados para filtros individuales
+  // Estados para filtros individuales (nombre, ID) y para filtros por desplegable en Cuenta y Estado
   const [filterName, setFilterName] = useState("");
   const [filterId, setFilterId] = useState("");
   const [filterAccount, setFilterAccount] = useState("Todos");
@@ -42,13 +42,18 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para obtener todas las IDs de publicaciones de un usuario (paginando sin filtro de fecha)
-  const fetchAllItemIDs = async (userId, accessToken) => {
+  // Función para obtener todas las IDs de publicaciones de un usuario, paginando y aceptando rangos de fecha
+  // Si se pasan 'desde' y 'hasta', se incluyen en la consulta; de lo contrario, se omiten.
+  const fetchAllItemIDs = async (userId, accessToken, desde, hasta) => {
     let offset = 0;
     const limit = 50;
     let allItemIds = [];
+    let dateFilter = "";
+    if (desde && hasta) {
+      dateFilter = `&date_created=${desde},${hasta}`;
+    }
     while (true) {
-      const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}&access_token=${accessToken}`;
+      const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}&access_token=${accessToken}${dateFilter}`;
       const resp = await fetch(url);
       if (!resp.ok) {
         console.error("Error al obtener IDs de publicaciones:", resp.status);
@@ -89,7 +94,8 @@ const Publicaciones = () => {
     return allDetails;
   };
 
-  // 3. Actualización en segundo plano: cada vez que se carga el componente se consulta MercadoLibre y se actualiza Firestore
+  // 3. Actualización en segundo plano: Cada vez que se carga el componente se consulta MercadoLibre y se actualiza Firestore.
+  // Para superar el límite de offset, se segmenta la consulta por año (desde el año actual hasta el 2000, o hasta que no se obtengan resultados).
   useEffect(() => {
     const updatePublicacionesFromML = async () => {
       for (const cuenta of cuentas) {
@@ -98,12 +104,21 @@ const Publicaciones = () => {
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
         if (!accessToken || !userId) continue;
         try {
-          // Obtener todas las IDs de publicaciones (según lo permitido por la API)
-          const allItemIds = await fetchAllItemIDs(userId, accessToken);
+          const currentYear = new Date().getFullYear();
+          let allItemIds = [];
+          // Se recorren los años desde el actual hasta el 2000
+          for (let year = currentYear; year >= 2000; year--) {
+            const desde = `${year}-01-01T00:00:00.000Z`;
+            const hasta = `${year}-12-31T23:59:59.999Z`;
+            const idsSegment = await fetchAllItemIDs(userId, accessToken, desde, hasta);
+            if (idsSegment.length > 0) {
+              allItemIds = [...allItemIds, ...idsSegment];
+            }
+            // Opcional: si se reciben cero resultados en un año, se podría contar años consecutivos sin resultados para romper el ciclo.
+          }
           if (allItemIds.length === 0) continue;
-          // Obtener los detalles de los ítems en lotes
           const detalles = await fetchItemDetailsInBatches(allItemIds, accessToken, nickname, userId);
-          // Actualizar (o crear) cada documento en Firestore
+          // Actualizar o crear cada publicación en Firestore
           for (const pub of detalles) {
             await setDoc(doc(db, "publicaciones", pub.id), pub, { merge: true });
           }
@@ -114,12 +129,12 @@ const Publicaciones = () => {
     };
 
     if (cuentas.length > 0) {
-      // Ejecuta la actualización en segundo plano sin interrumpir la experiencia del usuario
+      // Ejecuta la actualización en segundo plano sin interrumpir al usuario
       updatePublicacionesFromML();
     }
   }, [cuentas]);
 
-  // 4. Calcular las opciones disponibles para los desplegables de Cuenta y Estado
+  // 4. Calcular las opciones disponibles para los desplegables de Cuenta y Estado a partir de los datos cacheados
   const availableAccounts = Array.from(
     new Set(publicaciones.map((item) => item.userNickname).filter(Boolean))
   ).sort();
@@ -128,13 +143,12 @@ const Publicaciones = () => {
     new Set(publicaciones.map((item) => item.status).filter(Boolean))
   ).sort();
 
-  // 5. Filtrado: se filtran las publicaciones según el buscador y los filtros desplegables
+  // 5. Filtrado: Se filtran las publicaciones según el buscador general y los filtros (Nombre, ID, Cuenta y Estado)
   const publicacionesFiltradas = publicaciones.filter((item) => {
     const title = item.title?.toLowerCase() || "";
     const id = (item.id || "").toLowerCase();
     const cuenta = item.userNickname?.toLowerCase() || "";
     const status = item.status?.toLowerCase() || "";
-
     return (
       title.includes(filterName.toLowerCase()) &&
       id.includes(filterId.toLowerCase()) &&
