@@ -12,6 +12,21 @@ const chunkArray = (array, chunkSize) => {
   return results;
 };
 
+// Función para limpiar/sanitizar los datos de la publicación
+// Extraemos solo las propiedades que realmente necesitamos
+const sanitizePublication = (pub, nickname, userId) => {
+  return {
+    id: pub.id,
+    title: pub.title,
+    price: pub.price,
+    status: pub.status,
+    thumbnail: pub.thumbnail,
+    currency_id: pub.currency_id,
+    userNickname: nickname,
+    accountId: userId,
+  };
+};
+
 const Publicaciones = () => {
   // Estados para cuentas y publicaciones cacheadas
   const [cuentas, setCuentas] = useState([]);
@@ -51,10 +66,10 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para obtener todas las IDs de publicaciones (limit máximo 100)
+  // Función para obtener todas las IDs de publicaciones (límite máximo 100)
   const fetchAllItemIDs = async (userId, accessToken) => {
     let offset = 0;
-    const limit = 100; // Límite máximo permitido
+    const limit = 100;
     let allItemIds = [];
     while (true) {
       const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}&access_token=${accessToken}`;
@@ -89,13 +104,10 @@ const Publicaciones = () => {
       }
       const itemsData = await itemsResponse.json();
       console.log("Detalles recibidos:", itemsData);
+      // Filtramos sólo los items con código 200 y sanitizamos los datos
       const validItems = itemsData
         .filter((item) => item.code === 200)
-        .map((item) => ({
-          ...item.body,             // id, title, price, status, thumbnail, etc.
-          userNickname: nickname,   // Agrega el nickname de la cuenta
-          accountId: userId,        // Guarda también el ID de la cuenta
-        }));
+        .map((item) => sanitizePublication(item.body, nickname, userId));
       allDetails = [...allDetails, ...validItems];
     }
     return allDetails;
@@ -115,11 +127,11 @@ const Publicaciones = () => {
           if (allItemIds.length === 0) continue;
           
           const detalles = await fetchItemDetailsInBatches(allItemIds, accessToken, nickname, userId);
-          console.log(`Cuenta ${cuenta.id} - Detalles obtenidos:`, detalles);
+          console.log(`Cuenta ${cuenta.id} - Detalles obtenidos (sanitizados):`, detalles);
           if (detalles.length === 0) continue;
           
-          // Dividir los detalles en batches más pequeños (por ejemplo, de 50 documentos)
-          const chunks = chunkArray(detalles, 50);
+          // Dividir los detalles en batches pequeños (por ejemplo, 10 documentos por batch)
+          const chunks = chunkArray(detalles, 10);
           for (const [index, chunk] of chunks.entries()) {
             const batch = writeBatch(db);
             chunk.forEach((pub) => {
