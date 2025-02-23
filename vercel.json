@@ -1,19 +1,16 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "api/*.js",
-      "use": "@vercel/node"
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
     },
     {
-      "src": "src/**/*",
-      "use": "@vercel/static-build"
-    }
-  ],
-  "routes": [
+      "source": "/mercadolibre",
+      "destination": "/index.html"
+    },
     {
-      "src": "/api/(.*)",
-      "dest": "api/$1"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
