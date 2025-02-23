@@ -108,7 +108,7 @@ const Publicaciones = () => {
   const [selectedCuenta, setSelectedCuenta] = useState("Todas");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Escuchar cambios en Firestore para obtener las cuentas con token
+  // Listener para las cuentas en Firestore
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const cuentasTemp = snapshot.docs.map((doc) => ({
@@ -116,6 +116,15 @@ const Publicaciones = () => {
         ...doc.data(),
       }));
       setCuentas(cuentasTemp);
+    });
+    return () => unsub();
+  }, []);
+
+  // Listener para la colección "publicaciones" en Firestore
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "publicaciones"), (snapshot) => {
+      const pubs = snapshot.docs.map((doc) => doc.data());
+      setPublicaciones(pubs);
     });
     return () => unsub();
   }, []);
@@ -145,7 +154,7 @@ const Publicaciones = () => {
     return allIds;
   };
 
-  // Obtener publicaciones de cada cuenta usando el modo scan
+  // Actualización en segundo plano de las publicaciones en Firestore
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let todasLasPublicaciones = [];
@@ -201,8 +210,7 @@ const Publicaciones = () => {
           console.error("Error al guardar la publicación con id:", pub.id, error);
         }
       });
-
-      setPublicaciones(publicacionesUnicas);
+      // El listener en Firestore actualizará el estado, por lo que no es necesario llamar a setPublicaciones aquí.
       setCurrentPage(1);
     };
 
@@ -225,7 +233,7 @@ const Publicaciones = () => {
     });
   }, [publicaciones, busquedaTitulo, busquedaId, selectedStatus, selectedCuenta]);
 
-  // Paginación (sin números, solo "Anterior" y "Siguiente")
+  // Paginación
   const totalPaginas = Math.ceil(publicacionesFiltradas.length / ITEMS_PER_PAGE);
   const indexInicio = (currentPage - 1) * ITEMS_PER_PAGE;
   const publicacionesPaginadas = publicacionesFiltradas.slice(
