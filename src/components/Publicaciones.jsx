@@ -27,6 +27,9 @@ const sanitizePublication = (pub, nickname, userId) => {
   };
 };
 
+// Función para introducir retardo (en milisegundos)
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 const Publicaciones = () => {
   // Estados para cuentas y publicaciones cacheadas
   const [cuentas, setCuentas] = useState([]);
@@ -144,6 +147,8 @@ const Publicaciones = () => {
             });
             await batch.commit();
             console.log(`Cuenta ${cuenta.id} - Batch ${index + 1} commit exitoso.`);
+            // Espera 500ms entre batch commits para no saturar la cuota de escritura
+            await sleep(500);
           }
         } catch (error) {
           console.error("Error actualizando publicaciones para la cuenta:", cuenta.id, error);
