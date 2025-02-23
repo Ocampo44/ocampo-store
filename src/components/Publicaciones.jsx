@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
@@ -158,69 +158,80 @@ const Publicaciones = () => {
     return allIds;
   };
 
-  // Actualización en segundo plano de las publicaciones en Firestore
-  useEffect(() => {
-    const fetchPublicaciones = async () => {
-      let todasLasPublicaciones = [];
+  // Función para traer y guardar las publicaciones
+  const fetchPublicaciones = useCallback(async () => {
+    let todasLasPublicaciones = [];
 
-      for (const cuenta of cuentas) {
-        const accessToken = cuenta.token?.access_token;
-        const userId = cuenta.profile?.id;
-        const nickname = cuenta.profile?.nickname || "Sin Nombre";
+    for (const cuenta of cuentas) {
+      const accessToken = cuenta.token?.access_token;
+      const userId = cuenta.profile?.id;
+      const nickname = cuenta.profile?.nickname || "Sin Nombre";
 
-        if (!accessToken || !userId) continue;
+      if (!accessToken || !userId) continue;
 
-        try {
-          const itemIds = await fetchAllItemIds(userId, accessToken);
-          if (!itemIds.length) continue;
+      try {
+        const itemIds = await fetchAllItemIds(userId, accessToken);
+        if (!itemIds.length) continue;
 
-          const batchSize = 20;
-          for (let i = 0; i < itemIds.length; i += batchSize) {
-            const batchIds = itemIds.slice(i, i + batchSize).join(",");
-            const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
-            const itemsResponse = await fetch(itemsUrl);
+        const batchSize = 20;
+        for (let i = 0; i < itemIds.length; i += batchSize) {
+          const batchIds = itemIds.slice(i, i + batchSize).join(",");
+          const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
+          const itemsResponse = await fetch(itemsUrl);
 
-            if (!itemsResponse.ok) {
-              console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
-              continue;
-            }
-
-            const itemsData = await itemsResponse.json();
-
-            const validItems = itemsData
-              .filter((item) => item.code === 200 && item.body)
-              .map((item) => ({
-                ...item.body,
-                userNickname: nickname,
-              }));
-
-            todasLasPublicaciones = todasLasPublicaciones.concat(validItems);
+          if (!itemsResponse.ok) {
+            console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
+            continue;
           }
-        } catch (error) {
-          console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
+
+          const itemsData = await itemsResponse.json();
+
+          const validItems = itemsData
+            .filter((item) => item.code === 200 && item.body)
+            .map((item) => ({
+              ...item.body,
+              userNickname: nickname,
+            }));
+
+          todasLasPublicaciones = todasLasPublicaciones.concat(validItems);
         }
+      } catch (error) {
+        console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
       }
+    }
 
-      // Filtrar duplicados basados en el ID de la publicación
-      const publicacionesUnicas = todasLasPublicaciones.filter(
-        (pub, index, self) => index === self.findIndex((p) => p.id === pub.id)
-      );
+    // Filtrar duplicados basados en el ID de la publicación
+    const publicacionesUnicas = todasLasPublicaciones.filter(
+      (pub, index, self) => index === self.findIndex((p) => p.id === pub.id)
+    );
 
-      // Guarda cada publicación en Firestore
-      for (const pub of publicacionesUnicas) {
-        try {
-          await setDoc(doc(db, "publicaciones", pub.id.toString()), pub, { merge: true });
-        } catch (error) {
-          console.error("Error al guardar la publicación con id:", pub.id, error);
-        }
+    // Guarda (o actualiza) cada publicación en Firestore
+    for (const pub of publicacionesUnicas) {
+      try {
+        await setDoc(doc(db, "publicaciones", pub.id.toString()), pub, { merge: true });
+      } catch (error) {
+        console.error("Error al guardar la publicación con id:", pub.id, error);
       }
-      setCurrentPage(1);
-    };
+    }
+    setCurrentPage(1);
+  }, [cuentas]);
 
+  // Actualización al cargar o cambiar las cuentas
+  useEffect(() => {
     if (cuentas.length > 0) {
       fetchPublicaciones();
     }
-  }, [cuentas]);
+  }, [cuentas, fetchPublicaciones]);
+
+  // Actualización periódica cada 60 segundos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (cuentas.length > 0) {
+        fetchPublicaciones();
+      }
+    }, 60000); // 60000 ms = 60 segundos
+    return () => clearInterval(interval);
+  }, [cuentas, fetchPublicaciones]);
 
   // Filtros: título, id, status y cuenta
   const publicacionesFiltradas = useMemo(() => {
