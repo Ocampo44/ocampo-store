@@ -3,32 +3,33 @@ import React, { useState, useEffect, useMemo } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
-// Función que genera rangos diarios (timestamps Unix) desde startDate hasta endDate
-const generateDailyRanges = (startDate, endDate) => {
+// Función que genera rangos semanales (timestamps Unix) desde startDate hasta endDate
+const generateWeeklyRanges = (startDate, endDate) => {
   const ranges = [];
   let current = new Date(startDate);
   const end = new Date(endDate);
 
   while (current < end) {
     const desde = Math.floor(current.getTime() / 1000);
-    const nextDay = new Date(current);
-    nextDay.setDate(current.getDate() + 1);
-    // El rango diario se define hasta el final del día (un segundo antes del siguiente día)
-    const hasta = Math.floor(nextDay.getTime() / 1000) - 1;
+    const nextWeek = new Date(current);
+    nextWeek.setDate(current.getDate() + 7);
+    // El rango se define hasta el final de la semana (un segundo antes de la siguiente semana)
+    const hasta = Math.floor(nextWeek.getTime() / 1000) - 1;
     ranges.push({ desde, hasta });
-    current = nextDay;
+    current = nextWeek;
   }
+
   return ranges;
 };
 
-// Función auxiliar para obtener publicaciones en un rango diario para una cuenta
+// Función auxiliar para obtener publicaciones en un rango semanal para una cuenta
 const fetchPublicacionesEnRango = async (userId, accessToken, nickname, desde, hasta) => {
   let publicacionesRango = [];
   let offset = 0;
   let total = Infinity;
-  const MAX_OFFSET = 1000; // Límite impuesto por el endpoint para cada consulta
+  const MAX_OFFSET = 1000; // límite impuesto por la API para cada consulta
 
-  // Consulta paginada en el rango diario
+  // Consulta paginada en el rango semanal
   while (offset < total && offset < MAX_OFFSET) {
     const url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}&date_created_from=${desde}&date_created_to=${hasta}`;
     const response = await fetch(url);
@@ -42,8 +43,8 @@ const fetchPublicacionesEnRango = async (userId, accessToken, nickname, desde, h
     }
     const nuevosIds = data.results || [];
     if (nuevosIds.length === 0) break;
-
-    // Procesamos en lotes de 20
+    
+    // Procesar en lotes de 20
     const batchSize = 20;
     for (let i = 0; i < nuevosIds.length; i += batchSize) {
       const batchIds = nuevosIds.slice(i, i + batchSize).join(",");
@@ -87,15 +88,15 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Para cada cuenta, obtener publicaciones dividiendo la consulta por días
+  // 2. Para cada cuenta, obtener los detalles de sus publicaciones por rangos semanales
   useEffect(() => {
     const fetchTodasPublicaciones = async () => {
       let todasLasPublicaciones = [];
 
-      // Define la fecha de inicio y la fecha final (puedes ajustar según tus necesidades)
-      const fechaInicio = "2020-01-01"; 
+      // Define la fecha de inicio y la fecha final (fecha actual)
+      const fechaInicio = "2020-01-01"; // ajustar según tus necesidades
       const fechaFin = new Date().toISOString().split("T")[0]; // fecha actual en formato YYYY-MM-DD
-      const rangosDiarios = generateDailyRanges(fechaInicio, fechaFin);
+      const rangosSemanales = generateWeeklyRanges(fechaInicio, fechaFin);
 
       for (const cuenta of cuentas) {
         const accessToken = cuenta.token?.access_token;
@@ -103,7 +104,7 @@ const Publicaciones = () => {
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
         if (!accessToken || !userId) continue;
 
-        for (const rango of rangosDiarios) {
+        for (const rango of rangosSemanales) {
           try {
             const publicacionesRango = await fetchPublicacionesEnRango(
               userId,
@@ -126,7 +127,7 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // 3. Filtrado de publicaciones según el texto ingresado y el filtro activo
+  // 3. Filtrar publicaciones según el texto ingresado y el filtro activo
   const publicacionesFiltradas = useMemo(() => {
     return publicaciones.filter((item) => {
       const valor =
