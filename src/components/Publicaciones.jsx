@@ -5,6 +5,86 @@ import { db } from "../firebaseConfig";
 
 const ITEMS_PER_PAGE = 20;
 
+const styles = {
+  container: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+    padding: "20px",
+    fontFamily: "'Roboto', sans-serif",
+    color: "#333",
+  },
+  header: {
+    textAlign: "center",
+    marginBottom: "30px",
+  },
+  filters: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "20px",
+    justifyContent: "center",
+    marginBottom: "20px",
+  },
+  input: {
+    padding: "10px",
+    width: "300px",
+    border: "1px solid #ccc",
+    borderRadius: "4px",
+    fontSize: "16px",
+  },
+  select: {
+    padding: "10px",
+    border: "1px solid #ccc",
+    borderRadius: "4px",
+    fontSize: "16px",
+  },
+  cardList: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+    gap: "20px",
+  },
+  card: {
+    border: "1px solid #e0e0e0",
+    borderRadius: "8px",
+    overflow: "hidden",
+    boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
+    backgroundColor: "#fff",
+    display: "flex",
+    flexDirection: "column",
+  },
+  cardImage: {
+    width: "100%",
+    height: "180px",
+    objectFit: "cover",
+  },
+  cardBody: {
+    padding: "15px",
+  },
+  cardTitle: {
+    fontSize: "18px",
+    fontWeight: "bold",
+    marginBottom: "10px",
+  },
+  cardText: {
+    fontSize: "14px",
+    marginBottom: "5px",
+  },
+  pagination: {
+    display: "flex",
+    justifyContent: "center",
+    marginTop: "30px",
+    flexWrap: "wrap",
+    gap: "10px",
+  },
+  pageButton: (active) => ({
+    padding: "8px 12px",
+    border: "1px solid #ccc",
+    borderRadius: "4px",
+    backgroundColor: active ? "#1976d2" : "#fff",
+    color: active ? "#fff" : "#1976d2",
+    cursor: "pointer",
+  }),
+};
+
 const Publicaciones = () => {
   const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState([]);
@@ -12,7 +92,7 @@ const Publicaciones = () => {
   const [selectedStatus, setSelectedStatus] = useState("Todos");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // 1. Escuchar cambios en Firestore para obtener las cuentas con token
+  // Escuchar cambios en Firestore para obtener las cuentas con token
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const cuentasTemp = snapshot.docs.map((doc) => ({
@@ -24,34 +104,32 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Función para obtener todos los IDs de publicaciones usando search_type=scan
+  // Función para obtener todos los IDs de publicaciones usando search_type=scan
   const fetchAllItemIds = async (userId, accessToken) => {
     let allIds = [];
     let scrollId = null;
     let url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan`;
-    
+
     do {
       if (scrollId) {
         url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan&scroll_id=${scrollId}`;
       }
-      
       const response = await fetch(url);
       if (!response.ok) {
         console.error("Error al obtener publicaciones en modo scan:", response.status);
         break;
       }
-      
       const data = await response.json();
       if (data.results && Array.isArray(data.results)) {
         allIds = [...allIds, ...data.results];
       }
       scrollId = data.scroll_id;
     } while (scrollId);
-    
+
     return allIds;
   };
 
-  // 3. Obtener publicaciones de cada cuenta usando el modo scan
+  // Obtener publicaciones de cada cuenta usando el modo scan
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let todasLasPublicaciones = [];
@@ -93,12 +171,12 @@ const Publicaciones = () => {
           console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
       }
-      
+
       // Filtrar duplicados basados en el ID de la publicación
       const publicacionesUnicas = todasLasPublicaciones.filter(
         (pub, index, self) => index === self.findIndex((p) => p.id === pub.id)
       );
-      
+
       setPublicaciones(publicacionesUnicas);
       setCurrentPage(1);
     };
@@ -108,7 +186,7 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // 4. Filtrar publicaciones según la búsqueda y el estado seleccionado
+  // Filtrar publicaciones según la búsqueda y el estado seleccionado
   const publicacionesFiltradas = useMemo(() => {
     return publicaciones.filter((item) => {
       const titulo = item.title?.toLowerCase() || "";
@@ -118,25 +196,27 @@ const Publicaciones = () => {
     });
   }, [publicaciones, busqueda, selectedStatus]);
 
-  // 5. Paginación
+  // Paginación
   const totalPaginas = Math.ceil(publicacionesFiltradas.length / ITEMS_PER_PAGE);
   const indexInicio = (currentPage - 1) * ITEMS_PER_PAGE;
   const publicacionesPaginadas = publicacionesFiltradas.slice(indexInicio, indexInicio + ITEMS_PER_PAGE);
 
-  // 6. Obtener lista de estados disponibles para el dropdown
+  // Obtener lista de estados disponibles para el dropdown
   const estadosDisponibles = useMemo(() => {
     const estados = publicaciones.map((pub) => pub.status);
     return ["Todos", ...Array.from(new Set(estados))];
   }, [publicaciones]);
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h2>Publicaciones de usuarios conectados</h2>
-      <p>
-        <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
-      </p>
-      
-      <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
+    <div style={styles.container}>
+      <header style={styles.header}>
+        <h2>Publicaciones de usuarios conectados</h2>
+        <p>
+          <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
+        </p>
+      </header>
+
+      <div style={styles.filters}>
         <input
           type="text"
           placeholder="Buscar ítems..."
@@ -145,7 +225,7 @@ const Publicaciones = () => {
             setBusqueda(e.target.value);
             setCurrentPage(1);
           }}
-          style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
+          style={styles.input}
         />
         <select
           value={selectedStatus}
@@ -153,7 +233,7 @@ const Publicaciones = () => {
             setSelectedStatus(e.target.value);
             setCurrentPage(1);
           }}
-          style={{ padding: "8px" }}
+          style={styles.select}
         >
           {estadosDisponibles.map((estado) => (
             <option key={estado} value={estado}>
@@ -164,59 +244,43 @@ const Publicaciones = () => {
       </div>
 
       {publicacionesPaginadas.length === 0 ? (
-        <p>No se encontraron publicaciones.</p>
+        <p style={{ textAlign: "center" }}>No se encontraron publicaciones.</p>
       ) : (
-        <ul style={{ listStyle: "none", padding: 0 }}>
+        <div style={styles.cardList}>
           {publicacionesPaginadas.map((pub) => (
-            <li
-              key={pub.id}
-              style={{
-                border: "1px solid #ddd",
-                padding: "10px",
-                marginBottom: "10px",
-                borderRadius: "4px",
-                display: "flex",
-                alignItems: "flex-start",
-                gap: "10px",
-              }}
-            >
+            <div key={pub.id} style={styles.card}>
               <img
                 src={pub.thumbnail}
                 alt={pub.title}
-                style={{ width: "60px", height: "60px", objectFit: "cover" }}
+                style={styles.cardImage}
               />
-              <div>
-                <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
-                <p style={{ margin: 0 }}>
+              <div style={styles.cardBody}>
+                <h3 style={styles.cardTitle}>{pub.title}</h3>
+                <p style={styles.cardText}>
                   Precio: {pub.price} {pub.currency_id}
                 </p>
-                <p style={{ margin: 0 }}>
+                <p style={styles.cardText}>
                   <strong>Cuenta:</strong> {pub.userNickname}
                 </p>
-                <p style={{ margin: 0 }}>
-                  <strong>ID de la publicación:</strong> {pub.id}
+                <p style={styles.cardText}>
+                  <strong>ID:</strong> {pub.id}
                 </p>
-                <p style={{ margin: 0 }}>
+                <p style={styles.cardText}>
                   <strong>Estado:</strong> {pub.status}
                 </p>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
 
       {totalPaginas > 1 && (
-        <div style={{ display: "flex", gap: "5px", marginTop: "20px", flexWrap: "wrap" }}>
+        <div style={styles.pagination}>
           {Array.from({ length: totalPaginas }, (_, idx) => idx + 1).map((num) => (
             <button
               key={num}
               onClick={() => setCurrentPage(num)}
-              style={{
-                padding: "8px 12px",
-                border: "1px solid #ddd",
-                backgroundColor: num === currentPage ? "#eee" : "#fff",
-                cursor: "pointer",
-              }}
+              style={styles.pageButton(num === currentPage)}
             >
               {num}
             </button>
