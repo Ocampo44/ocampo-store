@@ -35,7 +35,7 @@ import EditCompraForm from "./components/EditCompraForm";
 import MercadoLibreConnections from "./components/MercadoLibreConnections";
 // Importar Publicaciones
 import Publicaciones from "./components/Publicaciones";
-// Sección de Ventas
+// Sección de Ventas (ahora utiliza el proxy para evitar CORS)
 import Ventas from "./components/Ventas";
 
 function App() {
