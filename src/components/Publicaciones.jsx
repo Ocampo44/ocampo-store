@@ -1,6 +1,6 @@
 // src/components/Publicaciones.jsx
 import React, { useState, useEffect } from "react";
-import { collection, onSnapshot, setDoc, doc } from "firebase/firestore";
+import { collection, onSnapshot, setDoc, doc, writeBatch } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
 const Publicaciones = () => {
@@ -42,10 +42,10 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para obtener todas las IDs de publicaciones de un usuario (paginando sin filtro de fecha)
+  // Función para obtener todas las IDs de publicaciones (utilizando un límite máximo de 100)
   const fetchAllItemIDs = async (userId, accessToken) => {
     let offset = 0;
-    const limit = 50;
+    const limit = 100; // Se establece un límite máximo de 100 items por solicitud
     let allItemIds = [];
     while (true) {
       const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}&access_token=${accessToken}`;
@@ -89,7 +89,7 @@ const Publicaciones = () => {
     return allDetails;
   };
 
-  // 3. Actualización en segundo plano: Cada vez que se carga el componente, se consulta MercadoLibre y se actualiza Firestore
+  // 3. Actualización en segundo plano: Consulta MercadoLibre y actualiza Firestore
   useEffect(() => {
     const updatePublicacionesFromML = async () => {
       for (const cuenta of cuentas) {
@@ -103,10 +103,14 @@ const Publicaciones = () => {
           if (allItemIds.length === 0) continue;
           // Obtener los detalles de los ítems en lotes
           const detalles = await fetchItemDetailsInBatches(allItemIds, accessToken, nickname, userId);
-          // Para cada publicación, actualizar (o crear) el documento en Firestore
-          for (const pub of detalles) {
-            await setDoc(doc(db, "publicaciones", pub.id), pub, { merge: true });
-          }
+          if (detalles.length === 0) continue;
+          // Actualizar (o crear) los documentos en Firestore utilizando batch writes para minimizar las operaciones individuales
+          const batch = writeBatch(db);
+          detalles.forEach((pub) => {
+            const pubRef = doc(db, "publicaciones", pub.id);
+            batch.set(pubRef, pub, { merge: true });
+          });
+          await batch.commit();
         } catch (error) {
           console.error("Error actualizando publicaciones para la cuenta:", cuenta.id, error);
         }
