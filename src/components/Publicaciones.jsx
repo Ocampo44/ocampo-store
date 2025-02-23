@@ -13,14 +13,14 @@ const chunkArray = (array, chunkSize) => {
 };
 
 // Función para limpiar/sanitizar los datos de la publicación
-// Extraemos solo las propiedades que realmente necesitamos
+// Extraemos solo las propiedades necesarias
 const sanitizePublication = (pub, nickname, userId) => {
   return {
     id: pub.id,
     title: pub.title,
     price: pub.price,
     status: pub.status,
-    thumbnail: pub.thumbnail,
+    thumbnail: pub.thumbnail, // se revisa la URL al renderizar la imagen
     currency_id: pub.currency_id,
     userNickname: nickname,
     accountId: userId,
@@ -107,7 +107,6 @@ const Publicaciones = () => {
       }
       const itemsData = await itemsResponse.json();
       console.log("Detalles recibidos:", itemsData);
-      // Filtramos sólo los items con código 200 y sanitizamos los datos
       const validItems = itemsData
         .filter((item) => item.code === 200)
         .map((item) => sanitizePublication(item.body, nickname, userId));
@@ -147,7 +146,7 @@ const Publicaciones = () => {
             });
             await batch.commit();
             console.log(`Cuenta ${cuenta.id} - Batch ${index + 1} commit exitoso.`);
-            // Espera 500ms entre batch commits para no saturar la cuota de escritura
+            // Espera 500ms entre batch commits para no saturar la cuota
             await sleep(500);
           }
         } catch (error) {
@@ -271,41 +270,47 @@ const Publicaciones = () => {
         <p>No se encontraron publicaciones.</p>
       ) : (
         <ul style={{ listStyle: "none", padding: 0 }}>
-          {publicacionesEnPagina.map((pub) => (
-            <li
-              key={pub.id}
-              style={{
-                border: "1px solid #ddd",
-                padding: "10px",
-                marginBottom: "10px",
-                borderRadius: "4px",
-                display: "flex",
-                alignItems: "flex-start",
-                gap: "10px",
-              }}
-            >
-              <img
-                src={pub.thumbnail}
-                alt={pub.title}
-                style={{ width: "60px", height: "60px", objectFit: "cover" }}
-              />
-              <div>
-                <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
-                <p style={{ margin: 0 }}>
-                  Precio: {pub.price} {pub.currency_id}
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>Cuenta:</strong> {pub.userNickname}
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>ID:</strong> {pub.id}
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>Estado:</strong> {pub.status}
-                </p>
-              </div>
-            </li>
-          ))}
+          {publicacionesEnPagina.map((pub) => {
+            // Forzar HTTPS en la URL de la imagen, si es necesario
+            const secureThumbnail = pub.thumbnail && pub.thumbnail.startsWith("http://")
+              ? pub.thumbnail.replace(/^http:\/\//i, "https://")
+              : pub.thumbnail;
+            return (
+              <li
+                key={pub.id}
+                style={{
+                  border: "1px solid #ddd",
+                  padding: "10px",
+                  marginBottom: "10px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "10px",
+                }}
+              >
+                <img
+                  src={secureThumbnail}
+                  alt={pub.title}
+                  style={{ width: "60px", height: "60px", objectFit: "cover" }}
+                />
+                <div>
+                  <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
+                  <p style={{ margin: 0 }}>
+                    Precio: {pub.price} {pub.currency_id}
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    <strong>Cuenta:</strong> {pub.userNickname}
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    <strong>ID:</strong> {pub.id}
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    <strong>Estado:</strong> {pub.status}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
 
