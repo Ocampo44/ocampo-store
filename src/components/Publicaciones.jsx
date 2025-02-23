@@ -1,4 +1,3 @@
-// src/components/Publicaciones.jsx
 import React, { useState, useEffect } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
@@ -32,62 +31,10 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  /*  
-    Función recursiva para obtener todos los IDs de ítems de una cuenta.
-    Se realiza paginación hasta un máximo de offset (maxOffset) y, si se alcanza,
-    se usa un parámetro de fecha (date_created_to) para traer ítems anteriores.
-  */
-  const fetchItemIdsForCuenta = async (userId, accessToken, dateTo = null) => {
-    let allItemIds = [];
-    let offset = 0;
-    const limit = 50;       // Límite por petición (por defecto de la API)
-    const maxOffset = 1050; // Límite máximo de offset permitido en una sola consulta
-    let seguir = true;
-    let lastSearchData = null; // Variable para almacenar el último resultado
-
-    while (seguir) {
-      let url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}`;
-      if (dateTo) {
-        url += `&date_created_to=${encodeURIComponent(dateTo)}`;
-      }
-      const searchResponse = await fetch(url);
-      if (!searchResponse.ok) {
-        console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
-        break;
-      }
-      lastSearchData = await searchResponse.json();
-      const idsSegmento = lastSearchData.results || [];
-      allItemIds = [...allItemIds, ...idsSegmento];
-
-      // Si se obtiene menos del límite o se alcanzó el máximo offset, termina el segmento
-      if (idsSegmento.length < limit || offset + limit >= maxOffset) {
-        break;
-      }
-      offset += limit;
-    }
-
-    // Si se alcanzó el máximo offset y la API indica que hay más ítems, segmentamos usando fecha
-    if (allItemIds.length === maxOffset && lastSearchData?.paging?.total > maxOffset) {
-      // Extraer las fechas de creación de los ítems obtenidos
-      const fechas = allItemIds
-        .map((item) => new Date(item.date_created))
-        .filter((fecha) => !isNaN(fecha));
-      if (fechas.length > 0) {
-        const oldestDate = new Date(Math.min(...fechas));
-        const oldestDateISO = oldestDate.toISOString();
-        // Llamada recursiva para obtener los ítems anteriores a oldestDateISO
-        const additionalIds = await fetchItemIdsForCuenta(userId, accessToken, oldestDateISO);
-        allItemIds = [...allItemIds, ...additionalIds];
-      }
-    }
-    return allItemIds;
-  };
-
-  // 2. Obtener y mostrar las publicaciones conforme se van trayendo
+  // 2. Obtener y mostrar todas las publicaciones sin el límite de 1050
   useEffect(() => {
     const fetchPublicaciones = async () => {
       setCargando(true);
-      // Reiniciamos el estado para que se vayan mostrando los ítems conforme llegan
       setPublicaciones([]);
 
       for (const cuenta of cuentas) {
@@ -98,39 +45,65 @@ const Publicaciones = () => {
         if (!accessToken || !userId) continue;
 
         try {
-          // Obtener todos los IDs de ítems, segmentando si es necesario
-          const itemIds = await fetchItemIdsForCuenta(userId, accessToken);
-          if (itemIds.length === 0) continue;
+          let offset = 0;
+          let totalItems = Infinity;
+          const publicacionesTemp = [];
 
-          // Procesar en lotes para obtener detalles de cada ítem
-          const batchSize = 20;
-          for (let i = 0; i < itemIds.length; i += batchSize) {
-            // Cada objeto en itemIds se asume que tiene una propiedad "id"
-            const batchIds = itemIds
-              .slice(i, i + batchSize)
-              .map((item) => item.id)
-              .join(",");
-            const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
-            const itemsResponse = await fetch(itemsUrl);
+          console.log(`🔍 Buscando publicaciones para ${nickname}...`);
 
-            if (!itemsResponse.ok) {
-              console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
-              continue;
+          while (offset < totalItems) {
+            const searchUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}&limit=50`;
+            console.log(`➡️ Fetching: ${searchUrl}`);
+
+            const searchResponse = await fetch(searchUrl);
+            if (!searchResponse.ok) {
+              console.error("⚠️ Error al obtener IDs de publicaciones:", searchResponse.status);
+              break;
             }
 
-            const itemsData = await itemsResponse.json();
-            const validItems = itemsData
-              .filter((item) => item.code === 200)
-              .map((item) => ({
-                ...item.body, // Contiene propiedades como id, title, price, thumbnail, status, etc.
-                userNickname: nickname,
-              }));
+            const searchData = await searchResponse.json();
+            const itemIds = searchData.results || [];
+            totalItems = searchData.paging?.total || itemIds.length;
 
-            // Actualizar el estado de forma incremental para mostrar las publicaciones conforme llegan
-            setPublicaciones((prev) => [...prev, ...validItems]);
+            console.log(`📌 Total Items en ML: ${totalItems}, Offset Actual: ${offset}`);
+
+            if (itemIds.length === 0) break;
+            offset += searchData.paging?.limit || 50;
+
+            // Obtener detalles en lotes de 20
+            const batchSize = 20;
+            for (let i = 0; i < itemIds.length; i += batchSize) {
+              const batchIds = itemIds.slice(i, i + batchSize).join(",");
+              const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
+              
+              console.log(`📦 Obteniendo detalles: ${itemsUrl}`);
+
+              const itemsResponse = await fetch(itemsUrl);
+              if (!itemsResponse.ok) {
+                console.error("⚠️ Error al obtener detalles de publicaciones:", itemsResponse.status);
+                continue;
+              }
+
+              const itemsData = await itemsResponse.json();
+              const validItems = itemsData
+                .filter((item) => item.code === 200)
+                .map((item) => ({
+                  ...item.body,
+                  userNickname: nickname,
+                }));
+
+              publicacionesTemp.push(...validItems);
+            }
+
+            // Evitar bloqueos con pausa de 500ms
+            await new Promise((r) => setTimeout(r, 500));
           }
+
+          console.log(`✅ Se trajeron ${publicacionesTemp.length} publicaciones para ${nickname}`);
+
+          setPublicaciones((prev) => [...prev, ...publicacionesTemp]);
         } catch (error) {
-          console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
+          console.error("❌ Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
       }
       setCargando(false);
@@ -141,11 +114,11 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // Opciones únicas para filtros de estado y cuenta
+  // Opciones únicas para filtros
   const opcionesEstado = Array.from(new Set(publicaciones.map((pub) => pub.status))).filter(Boolean);
   const opcionesCuenta = Array.from(new Set(publicaciones.map((pub) => pub.userNickname))).filter(Boolean);
 
-  // Filtrar publicaciones según los criterios seleccionados
+  // Filtrar publicaciones según criterios
   const publicacionesFiltradas = publicaciones.filter((item) => {
     const titulo = item.title?.toLowerCase() || "";
     const idItem = item.id?.toString().toLowerCase() || "";
@@ -153,6 +126,7 @@ const Publicaciones = () => {
     const matchID = idItem.includes(busquedaID.toLowerCase());
     const matchEstado = filtroEstado === "" || item.status === filtroEstado;
     const matchCuenta = filtroCuenta === "" || item.userNickname === filtroCuenta;
+
     return matchTitulo && matchID && matchEstado && matchCuenta;
   });
 
@@ -160,18 +134,6 @@ const Publicaciones = () => {
   const totalPaginas = Math.ceil(publicacionesFiltradas.length / itemsPorPagina);
   const inicio = (paginaActual - 1) * itemsPorPagina;
   const publicacionesPagina = publicacionesFiltradas.slice(inicio, inicio + itemsPorPagina);
-
-  const paginaSiguiente = () => {
-    if (paginaActual < totalPaginas) {
-      setPaginaActual(paginaActual + 1);
-    }
-  };
-
-  const paginaAnterior = () => {
-    if (paginaActual > 1) {
-      setPaginaActual(paginaActual - 1);
-    }
-  };
 
   return (
     <div style={{ padding: "20px" }}>
@@ -197,99 +159,33 @@ const Publicaciones = () => {
           style={{ padding: "8px", maxWidth: "400px" }}
         />
         <div>
-          <label htmlFor="filtroEstado" style={{ marginRight: "10px" }}>
-            Filtrar por Estado:
-          </label>
-          <select
-            id="filtroEstado"
-            value={filtroEstado}
-            onChange={(e) => setFiltroEstado(e.target.value)}
-            style={{ padding: "6px" }}
-          >
+          <label htmlFor="filtroEstado" style={{ marginRight: "10px" }}>Filtrar por Estado:</label>
+          <select id="filtroEstado" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} style={{ padding: "6px" }}>
             <option value="">Todos</option>
-            {opcionesEstado.map((estado) => (
-              <option key={estado} value={estado}>
-                {estado}
-              </option>
-            ))}
+            {opcionesEstado.map((estado) => <option key={estado} value={estado}>{estado}</option>)}
           </select>
         </div>
         <div>
-          <label htmlFor="filtroCuenta" style={{ marginRight: "10px" }}>
-            Filtrar por Cuenta:
-          </label>
-          <select
-            id="filtroCuenta"
-            value={filtroCuenta}
-            onChange={(e) => setFiltroCuenta(e.target.value)}
-            style={{ padding: "6px" }}
-          >
+          <label htmlFor="filtroCuenta" style={{ marginRight: "10px" }}>Filtrar por Cuenta:</label>
+          <select id="filtroCuenta" value={filtroCuenta} onChange={(e) => setFiltroCuenta(e.target.value)} style={{ padding: "6px" }}>
             <option value="">Todas</option>
-            {opcionesCuenta.map((cuenta) => (
-              <option key={cuenta} value={cuenta}>
-                {cuenta}
-              </option>
-            ))}
+            {opcionesCuenta.map((cuenta) => <option key={cuenta} value={cuenta}>{cuenta}</option>)}
           </select>
         </div>
       </div>
 
       {cargando && <p>Cargando publicaciones...</p>}
 
-      {publicacionesPagina.length === 0 && !cargando ? (
-        <p>No se encontraron publicaciones.</p>
-      ) : (
-        <ul style={{ listStyle: "none", padding: 0 }}>
+      {publicacionesPagina.length === 0 && !cargando ? <p>No se encontraron publicaciones.</p> : (
+        <ul>
           {publicacionesPagina.map((pub) => (
-            <li
-              key={pub.id}
-              style={{
-                border: "1px solid #ddd",
-                padding: "10px",
-                marginBottom: "10px",
-                borderRadius: "4px",
-                display: "flex",
-                alignItems: "flex-start",
-                gap: "10px",
-              }}
-            >
-              <img
-                src={pub.thumbnail}
-                alt={pub.title}
-                style={{ width: "60px", height: "60px", objectFit: "cover" }}
-              />
-              <div>
-                <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
-                <p style={{ margin: 0 }}>
-                  Precio: {pub.price} {pub.currency_id}
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>Cuenta:</strong> {pub.userNickname}
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>ID de la publicación:</strong> {pub.id}
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>Estado:</strong> {pub.status}
-                </p>
-              </div>
+            <li key={pub.id}>
+              <h3>{pub.title}</h3>
+              <p><strong>Cuenta:</strong> {pub.userNickname}</p>
             </li>
           ))}
         </ul>
       )}
-
-      {/* Navegación de páginas */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button onClick={paginaAnterior} disabled={paginaActual === 1} style={{ padding: "8px 12px" }}>
-          Anterior
-        </button>
-        <span>
-          Página {paginaActual} de {totalPaginas}
-        </span>
-        <button onClick={paginaSiguiente} disabled={paginaActual === totalPaginas} style={{ padding: "8px 12px" }}>
-          Siguiente
-        </button>
-      </div>
     </div>
   );
 };
