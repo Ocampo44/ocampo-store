@@ -46,6 +46,7 @@ const Publicaciones = () => {
           for (const estado of estados) {
             let offset = 0;
             let totalItems = Infinity;
+            let estadoItems = 0; // Contador para depurar
 
             console.log(`🔍 Buscando publicaciones en estado: ${estado} para ${nickname}...`);
 
@@ -68,10 +69,13 @@ const Publicaciones = () => {
               if (itemIds.length === 0) break;
               offset += searchData.paging?.limit || 50;
               allItemIds.push(...itemIds);
+              estadoItems += itemIds.length;
             }
+
+            console.log(`✅ Total de publicaciones en estado ${estado} para ${nickname}: ${estadoItems}`);
           }
 
-          console.log(`✅ Total IDs recopilados para ${nickname}: ${allItemIds.length}`);
+          console.log(`🔹 Total IDs recopilados para ${nickname}: ${allItemIds.length}`);
 
           // 🔹 Obtener detalles de los IDs en lotes de 20
           const batchSize = 20;
