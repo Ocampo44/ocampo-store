@@ -5,7 +5,98 @@ import { db } from "../firebaseConfig";
 const ITEMS_PER_PAGE = 20;
 
 const styles = {
-  // ... tus estilos
+  container: {
+    width: "100%",
+    padding: "10px 20px",
+    fontFamily: "'Roboto', sans-serif",
+    color: "#444",
+    backgroundColor: "#f7f9fc",
+    boxSizing: "border-box",
+  },
+  header: {
+    textAlign: "center",
+    marginBottom: "20px",
+  },
+  filtersContainer: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "20px",
+    justifyContent: "center",
+    marginBottom: "10px",
+  },
+  input: {
+    padding: "10px",
+    width: "250px",
+    border: "1px solid #ccc",
+    borderRadius: "4px",
+    fontSize: "16px",
+  },
+  select: {
+    padding: "10px",
+    width: "250px",
+    border: "1px solid #ccc",
+    borderRadius: "4px",
+    fontSize: "16px",
+    backgroundColor: "#fff",
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  th: {
+    textAlign: "left",
+    padding: "12px",
+    backgroundColor: "#1976d2",
+    color: "#fff",
+    fontSize: "16px",
+  },
+  td: {
+    padding: "12px",
+    borderBottom: "1px solid #ddd",
+    verticalAlign: "middle",
+  },
+  img: {
+    width: "80px",
+    height: "80px",
+    objectFit: "cover",
+    borderRadius: "4px",
+  },
+  statusBadge: (status) => {
+    let backgroundColor = "#999";
+    if (status === "active") backgroundColor = "#4caf50"; // verde
+    else if (status === "paused") backgroundColor = "#ff9800"; // naranja
+    else if (status === "inactive") backgroundColor = "#f44336"; // rojo
+    return {
+      padding: "5px 10px",
+      borderRadius: "12px",
+      backgroundColor,
+      color: "#fff",
+      fontSize: "12px",
+      textTransform: "capitalize",
+      textAlign: "center",
+      minWidth: "80px",
+    };
+  },
+  pagination: {
+    display: "flex",
+    justifyContent: "center",
+    marginTop: "20px",
+    gap: "15px",
+  },
+  button: {
+    padding: "10px 20px",
+    border: "none",
+    borderRadius: "4px",
+    fontSize: "16px",
+    cursor: "pointer",
+    backgroundColor: "#1976d2",
+    color: "#fff",
+    transition: "background-color 0.3s",
+  },
+  buttonDisabled: {
+    backgroundColor: "#ccc",
+    cursor: "default",
+  },
 };
 
 const Publicaciones = () => {
