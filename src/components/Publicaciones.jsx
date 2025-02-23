@@ -1,5 +1,5 @@
 // src/components/Publicaciones.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
@@ -23,7 +23,7 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Para cada cuenta, obtener todos los IDs de sus publicaciones y luego sus detalles
+  // 2. Para cada cuenta, obtener los detalles de sus publicaciones
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let todasLasPublicaciones = [];
@@ -33,13 +33,13 @@ const Publicaciones = () => {
         const userId = cuenta.profile?.id;
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
 
-        if (!accessToken || !userId) continue; // si faltan datos, pasar a la siguiente cuenta
+        if (!accessToken || !userId) continue;
 
         try {
-          // Paginar para obtener TODOS los IDs de las publicaciones
           let allItemIds = [];
           let offset = 0;
           let total = Infinity;
+          // Obtener todos los IDs paginando
           while (offset < total) {
             const searchResponse = await fetch(
               `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}`
@@ -55,13 +55,12 @@ const Publicaciones = () => {
             const nuevosIds = searchData.results || [];
             allItemIds = [...allItemIds, ...nuevosIds];
             offset += nuevosIds.length;
-            // Si no hay más resultados, salimos del bucle
             if (nuevosIds.length === 0) break;
           }
 
-          if (allItemIds.length === 0) continue; // Si no hay ítems, pasar a la siguiente cuenta
+          if (allItemIds.length === 0) continue;
 
-          // Procesamos los IDs en batches de 20
+          // Procesar en lotes de 20
           const batchSize = 20;
           for (let i = 0; i < allItemIds.length; i += batchSize) {
             const batchIds = allItemIds.slice(i, i + batchSize).join(",");
@@ -73,14 +72,12 @@ const Publicaciones = () => {
               continue;
             }
 
-            // itemsResponse.json() retorna un array: [{ code, body: { ...itemData }}, ...]
             const itemsData = await itemsResponse.json();
 
-            // Filtramos solo los que tienen code=200 y agregamos nickname
             const validItems = itemsData
               .filter((item) => item.code === 200)
               .map((item) => ({
-                ...item.body, // Contiene id, title, price, thumbnail, status, etc.
+                ...item.body,
                 userNickname: nickname,
               }));
 
@@ -99,43 +96,45 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // 3. Filtrar publicaciones según el texto ingresado y el filtro activo
-  const publicacionesFiltradas = publicaciones.filter((item) => {
-    const valor =
-      filterType === "id"
-        ? item.id?.toLowerCase() || ""
-        : filterType === "status"
-        ? item.status?.toLowerCase() || ""
-        : filterType === "nickname"
-        ? item.userNickname?.toLowerCase() || ""
-        : "";
-    return valor.includes(busqueda.toLowerCase());
-  });
+  // Memorizar publicaciones filtradas para evitar recálculos innecesarios
+  const publicacionesFiltradas = useMemo(() => {
+    return publicaciones.filter((item) => {
+      const valor =
+        filterType === "id"
+          ? (item.id || "").toLowerCase()
+          : filterType === "status"
+          ? (item.status || "").toLowerCase()
+          : filterType === "nickname"
+          ? (item.userNickname || "").toLowerCase()
+          : "";
+      return valor.includes(busqueda.toLowerCase());
+    });
+  }, [publicaciones, busqueda, filterType]);
 
-  // Reiniciamos la página actual cuando cambie la búsqueda o el filtro
+  // Reiniciar la página solo cuando la búsqueda o el filtro cambien
   useEffect(() => {
     setCurrentPage(1);
   }, [busqueda, filterType]);
 
-  // Calcular la paginación
+  // Cálculos de paginación
+  const totalPaginas = Math.ceil(publicacionesFiltradas.length / publicacionesPorPagina);
   const indexUltimo = currentPage * publicacionesPorPagina;
   const indexPrimer = indexUltimo - publicacionesPorPagina;
   const publicacionesPaginadas = publicacionesFiltradas.slice(indexPrimer, indexUltimo);
-  const totalPaginas = Math.ceil(publicacionesFiltradas.length / publicacionesPorPagina);
 
   const handleAnterior = () => {
-    if (currentPage > 1) setCurrentPage(currentPage - 1);
+    if (currentPage > 1) setCurrentPage((prev) => prev - 1);
   };
 
   const handleSiguiente = () => {
-    if (currentPage < totalPaginas) setCurrentPage(currentPage + 1);
+    if (currentPage < totalPaginas) setCurrentPage((prev) => prev + 1);
   };
 
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
 
-      {/* Pestañas de filtro */}
+      {/* Filtros */}
       <div style={{ marginBottom: "10px", display: "flex", gap: "10px" }}>
         <button
           onClick={() => setFilterType("id")}
@@ -200,14 +199,11 @@ const Publicaciones = () => {
                   gap: "10px",
                 }}
               >
-                {/* Imagen */}
                 <img
                   src={pub.thumbnail}
                   alt={pub.title}
                   style={{ width: "60px", height: "60px", objectFit: "cover" }}
                 />
-
-                {/* Información del ítem */}
                 <div>
                   <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
                   <p style={{ margin: 0 }}>
@@ -227,7 +223,6 @@ const Publicaciones = () => {
             ))}
           </ul>
 
-          {/* Paginación con botones "Anterior" y "Siguiente" */}
           <div
             style={{
               display: "flex",
@@ -248,11 +243,9 @@ const Publicaciones = () => {
             >
               Anterior
             </button>
-
             <span>
               Página {currentPage} de {totalPaginas}
             </span>
-
             <button
               onClick={handleSiguiente}
               disabled={currentPage === totalPaginas}
