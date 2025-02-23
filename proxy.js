@@ -7,7 +7,6 @@ export default async function handler(req, res) {
       return;
     }
   
-    // Construir la URL de la API de MercadoLibre (filtrando por órdenes pagadas)
     const url = `https://api.mercadolibre.com/orders/search?seller=${seller}&order.status=paid`;
   
     try {
