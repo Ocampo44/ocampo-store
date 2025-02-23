@@ -8,6 +8,8 @@ const Publicaciones = () => {
   const [publicaciones, setPublicaciones] = useState([]);
   const [busqueda, setBusqueda] = useState("");
   const [filterType, setFilterType] = useState("id"); // "id", "status" o "nickname"
+  const [currentPage, setCurrentPage] = useState(1);
+  const publicacionesPorPagina = 20;
 
   // 1. Escuchar cambios en Firestore para obtener las cuentas con token
   useEffect(() => {
@@ -110,6 +112,17 @@ const Publicaciones = () => {
     return valor.includes(busqueda.toLowerCase());
   });
 
+  // Reiniciamos la página actual cuando cambie la búsqueda o el filtro
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [busqueda, filterType]);
+
+  // Calcular la paginación
+  const indexUltimo = currentPage * publicacionesPorPagina;
+  const indexPrimer = indexUltimo - publicacionesPorPagina;
+  const publicacionesPaginadas = publicacionesFiltradas.slice(indexPrimer, indexUltimo);
+  const totalPaginas = Math.ceil(publicacionesFiltradas.length / publicacionesPorPagina);
+
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
@@ -164,46 +177,66 @@ const Publicaciones = () => {
       {publicacionesFiltradas.length === 0 ? (
         <p>No se encontraron publicaciones.</p>
       ) : (
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {publicacionesFiltradas.map((pub) => (
-            <li
-              key={pub.id}
-              style={{
-                border: "1px solid #ddd",
-                padding: "10px",
-                marginBottom: "10px",
-                borderRadius: "4px",
-                display: "flex",
-                alignItems: "flex-start",
-                gap: "10px",
-              }}
-            >
-              {/* Imagen */}
-              <img
-                src={pub.thumbnail}
-                alt={pub.title}
-                style={{ width: "60px", height: "60px", objectFit: "cover" }}
-              />
+        <>
+          <ul style={{ listStyle: "none", padding: 0 }}>
+            {publicacionesPaginadas.map((pub) => (
+              <li
+                key={pub.id}
+                style={{
+                  border: "1px solid #ddd",
+                  padding: "10px",
+                  marginBottom: "10px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "10px",
+                }}
+              >
+                {/* Imagen */}
+                <img
+                  src={pub.thumbnail}
+                  alt={pub.title}
+                  style={{ width: "60px", height: "60px", objectFit: "cover" }}
+                />
 
-              {/* Información del ítem */}
-              <div>
-                <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
-                <p style={{ margin: 0 }}>
-                  Precio: {pub.price} {pub.currency_id}
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>Cuenta:</strong> {pub.userNickname}
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>ID de la publicación:</strong> {pub.id}
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>Estado:</strong> {pub.status}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
+                {/* Información del ítem */}
+                <div>
+                  <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
+                  <p style={{ margin: 0 }}>
+                    Precio: {pub.price} {pub.currency_id}
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    <strong>Cuenta:</strong> {pub.userNickname}
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    <strong>ID de la publicación:</strong> {pub.id}
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    <strong>Estado:</strong> {pub.status}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* Paginación con pestañas */}
+          <div style={{ display: "flex", justifyContent: "center", marginTop: "20px", gap: "5px" }}>
+            {Array.from({ length: totalPaginas }, (_, index) => (
+              <button
+                key={index + 1}
+                onClick={() => setCurrentPage(index + 1)}
+                style={{
+                  padding: "8px 12px",
+                  border: "1px solid #ccc",
+                  backgroundColor: currentPage === index + 1 ? "#ddd" : "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                {index + 1}
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
