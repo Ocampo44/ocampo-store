@@ -1,27 +1,30 @@
-// src/firebaseConfig.js
+// Importar las funciones necesarias del SDK de Firebase
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-// Si necesitas Analytics, descomenta la siguiente línea:
-// import { getAnalytics } from "firebase/analytics";
+import { getStorage } from "firebase/storage";
+// Si necesitas autenticación, descomenta la siguiente línea:
+// import { getAuth } from "firebase/auth";
 
-// Tu configuración de Firebase
+// Configuración de Firebase para "Ocampo Store"
 const firebaseConfig = {
-  apiKey: "AIzaSyDwlBYLr5hTFZwxwpbB_9HaCop_VE3l3Uo",
-  authDomain: "sistema-de-inventarios-63b5f.firebaseapp.com",
-  projectId: "sistema-de-inventarios-63b5f",
-  storageBucket: "sistema-de-inventarios-63b5f.firebasestorage.app",
-  messagingSenderId: "608990255818",
-  appId: "1:608990255818:web:3ea2413a71b2d283f33233",
-  measurementId: "G-174PK18J6J"
+  apiKey: "AIzaSyAEIfc0jVIt1-yctZatdQbi1TsyoPIAQt0",
+  authDomain: "ocampo-store.firebaseapp.com",
+  projectId: "ocampo-store",
+  storageBucket: "ocampo-store.appspot.com",
+  messagingSenderId: "769300555409",
+  appId: "1:769300555409:web:f2043682c967d568964130"
 };
 
-// Inicializa Firebase
+// Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 
-// Inicializa Firestore
+// Inicializar Firestore
 const db = getFirestore(app);
 
-// Si necesitas Analytics, descomenta:
-// const analytics = getAnalytics(app);
+// Inicializar Storage (si necesitas almacenamiento de archivos)
+const storage = getStorage(app);
 
-export { app, db };
+// Si necesitas autenticación, descomenta la siguiente línea:
+// const auth = getAuth(app);
+
+export { app, db, storage };
