@@ -10,12 +10,12 @@ const Ventas = () => {
   const [selectedAccount, setSelectedAccount] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Recuperar las cuentas de MercadoLibre desde Firestore
+  // Escucha en tiempo real las cuentas de MercadoLibre desde Firestore
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const acc = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data(),
+        ...doc.data()
       }));
       setAccounts(acc);
     });
@@ -25,16 +25,18 @@ const Ventas = () => {
   // Obtener las ventas de la cuenta seleccionada
   useEffect(() => {
     if (!selectedAccount) return;
-    
-    // Buscar la cuenta y obtener su token
+
     const account = accounts.find(acc => acc.id === selectedAccount);
-    if (!account || !account.token || !account.token.access_token) return;
+    console.log("Cuenta seleccionada:", account);
+    if (!account || !account.token || !account.token.access_token) {
+      console.error("No se encontró un token válido para la cuenta seleccionada.");
+      return;
+    }
 
     const fetchSales = async () => {
       setLoading(true);
       try {
-        // Endpoint para buscar órdenes del vendedor
-        let url = `https://api.mercadolibre.com/orders/search?seller=${selectedAccount}`;
+        const url = `https://api.mercadolibre.com/orders/search?seller=${selectedAccount}`;
         const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${account.token.access_token}`
@@ -46,12 +48,12 @@ const Ventas = () => {
           return;
         }
         const data = await response.json();
+        console.log("Respuesta de la API:", data);
         let results = data.results || [];
-        // Filtrado local por estado si no es "all"
+        // Si se selecciona un estado específico, filtra localmente
         if (statusFilter !== 'all') {
           results = results.filter(sale => sale.status === statusFilter);
         }
-        // Actualiza el estado para que se muestren las ventas
         setSales(results);
       } catch (error) {
         console.error('Error al obtener ventas:', error);
