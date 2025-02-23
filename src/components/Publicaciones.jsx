@@ -24,7 +24,35 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Obtener publicaciones de cada cuenta, incluyendo paginación en la API
+  // 2. Función para obtener todos los IDs de publicaciones usando search_type=scan
+  const fetchAllItemIds = async (userId, accessToken) => {
+    let allIds = [];
+    let scrollId = null;
+    let url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan`;
+    
+    do {
+      // Si ya se obtuvo un scrollId, lo agregamos a la URL para la siguiente llamada
+      if (scrollId) {
+        url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan&scroll_id=${scrollId}`;
+      }
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error("Error al obtener publicaciones en modo scan:", response.status);
+        break;
+      }
+      
+      const data = await response.json();
+      if (data.results && Array.isArray(data.results)) {
+        allIds = [...allIds, ...data.results];
+      }
+      scrollId = data.scroll_id;
+    } while (scrollId);
+    
+    return allIds;
+  };
+
+  // 3. Obtener publicaciones de cada cuenta usando el modo scan
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let todasLasPublicaciones = [];
@@ -37,37 +65,11 @@ const Publicaciones = () => {
         if (!accessToken || !userId) continue;
 
         try {
-          // Recuperar todos los IDs de publicaciones usando paginación en la API
-          let itemIds = [];
-          let offset = 0;
-          let totalItems = Infinity; // valor inicial alto
-          while (offset < totalItems) {
-            const searchUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}`;
-            const searchResponse = await fetch(searchUrl);
-
-            if (!searchResponse.ok) {
-              console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
-              break;
-            }
-
-            const searchData = await searchResponse.json();
-            if (searchData.results) {
-              itemIds = [...itemIds, ...searchData.results];
-            }
-
-            // Actualizar totalItems y offset
-            if (searchData.paging) {
-              totalItems = searchData.paging.total;
-              offset += searchData.paging.limit;
-            } else {
-              break;
-            }
-          }
-
-          // Si no hay ítems, pasar a la siguiente cuenta
+          // Obtiene todos los IDs usando search_type=scan
+          const itemIds = await fetchAllItemIds(userId, accessToken);
           if (itemIds.length === 0) continue;
 
-          // Procesar en lotes de 20 para obtener detalles de cada publicación
+          // Procesa en lotes de 20 para no saturar la API al solicitar detalles
           const batchSize = 20;
           for (let i = 0; i < itemIds.length; i += batchSize) {
             const batchIds = itemIds.slice(i, i + batchSize).join(",");
@@ -79,13 +81,13 @@ const Publicaciones = () => {
               continue;
             }
 
-            // itemsResponse.json() retorna un array: [{ code, body: { ...itemData }}, ...]
+            // La respuesta es un array de objetos con { code, body }
             const itemsData = await itemsResponse.json();
 
             const validItems = itemsData
               .filter((item) => item.code === 200)
               .map((item) => ({
-                ...item.body,
+                ...item.body, // Contiene id, title, price, thumbnail, status, etc.
                 userNickname: nickname,
               }));
 
@@ -96,7 +98,7 @@ const Publicaciones = () => {
         }
       }
       setPublicaciones(todasLasPublicaciones);
-      setCurrentPage(1); // Reiniciar la página cuando se cargan nuevas publicaciones
+      setCurrentPage(1); // Reinicia la página cuando se actualizan las publicaciones
     };
 
     if (cuentas.length > 0) {
@@ -104,7 +106,7 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // 3. Filtrar publicaciones según búsqueda y estado
+  // 4. Filtrar publicaciones según la búsqueda y el estado seleccionado
   const publicacionesFiltradas = useMemo(() => {
     return publicaciones.filter((item) => {
       const titulo = item.title?.toLowerCase() || "";
@@ -114,12 +116,12 @@ const Publicaciones = () => {
     });
   }, [publicaciones, busqueda, selectedStatus]);
 
-  // 4. Paginación: calcular las publicaciones a mostrar
+  // 5. Paginación
   const totalPaginas = Math.ceil(publicacionesFiltradas.length / ITEMS_PER_PAGE);
   const indexInicio = (currentPage - 1) * ITEMS_PER_PAGE;
   const publicacionesPaginadas = publicacionesFiltradas.slice(indexInicio, indexInicio + ITEMS_PER_PAGE);
 
-  // 5. Obtener lista de estados únicos para el dropdown
+  // 6. Obtener lista de estados disponibles para el dropdown
   const estadosDisponibles = useMemo(() => {
     const estados = publicaciones.map((pub) => pub.status);
     return ["Todos", ...Array.from(new Set(estados))];
@@ -132,6 +134,7 @@ const Publicaciones = () => {
       <p>
         <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
       </p>
+      
       {/* Filtros */}
       <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
         <input
@@ -159,6 +162,7 @@ const Publicaciones = () => {
           ))}
         </select>
       </div>
+
       {/* Listado de publicaciones */}
       {publicacionesPaginadas.length === 0 ? (
         <p>No se encontraron publicaciones.</p>
@@ -201,6 +205,7 @@ const Publicaciones = () => {
           ))}
         </ul>
       )}
+
       {/* Paginación */}
       {totalPaginas > 1 && (
         <div style={{ display: "flex", gap: "5px", marginTop: "20px", flexWrap: "wrap" }}>
