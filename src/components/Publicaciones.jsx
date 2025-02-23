@@ -4,22 +4,17 @@ import { collection, onSnapshot, setDoc, doc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
 const Publicaciones = () => {
-  // Estado para las cuentas conectadas (mercadolibreUsers)
+  // Estado para las cuentas de MercadoLibre almacenadas en Firestore
   const [cuentas, setCuentas] = useState([]);
-  // Estado para las publicaciones cacheadas en Firestore
+  // Estado para las publicaciones "cacheadas" en Firestore
   const [publicaciones, setPublicaciones] = useState([]);
   // Estado para el buscador
   const [busqueda, setBusqueda] = useState("");
-
-  // Estados opcionales para filtrar por fecha (si deseas segmentar la consulta)
-  const [desde, setDesde] = useState(""); // Ejemplo: "2021-01-01"
-  const [hasta, setHasta] = useState(""); // Ejemplo: "2021-12-31"
-
-  // Para paginación en la UI
+  // Estado para la paginación en la UI
   const [currentPage, setCurrentPage] = useState(0);
-  const pageSize = 20; // Cantidad de publicaciones mostradas por página
+  const pageSize = 20; // Cantidad de publicaciones por página
 
-  // 1. Suscripción a la colección de cuentas de MercadoLibre
+  // 1. Suscribirse a la colección "mercadolibreUsers" para obtener las cuentas conectadas
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const cuentasTemp = snapshot.docs.map((doc) => ({
@@ -31,7 +26,7 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Suscripción a la colección "publicaciones" (cacheadas)
+  // 2. Suscribirse a la colección "publicaciones" (cacheadas)
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "publicaciones"), (snapshot) => {
       const pubs = snapshot.docs.map((doc) => doc.data());
@@ -40,18 +35,13 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Función para obtener todas las IDs de publicaciones de un usuario (paginar)
-  const fetchAllItemIDs = async (userId, accessToken, desde, hasta) => {
+  // Función para obtener todas las IDs de publicaciones de un usuario (paginando sin filtro de fecha)
+  const fetchAllItemIDs = async (userId, accessToken) => {
     let offset = 0;
     const limit = 50;
     let allItemIds = [];
-    // Si se establecen fechas, se asume que el endpoint acepta un filtro (ver documentación)
-    let dateFilter = "";
-    if (desde && hasta) {
-      dateFilter = `&date_created=${desde},${hasta}`;
-    }
     while (true) {
-      const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}&access_token=${accessToken}${dateFilter}`;
+      const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}&access_token=${accessToken}`;
       const resp = await fetch(url);
       if (!resp.ok) {
         console.error("Error al obtener IDs de publicaciones:", resp.status);
@@ -66,7 +56,7 @@ const Publicaciones = () => {
     return allItemIds;
   };
 
-  // Función para obtener el detalle de los ítems en lotes (batch de 20)
+  // Función para obtener el detalle de los ítems en lotes de 20
   const fetchItemDetailsInBatches = async (itemIds, accessToken, nickname, userId) => {
     const batchSize = 20;
     let allDetails = [];
@@ -84,15 +74,15 @@ const Publicaciones = () => {
         .filter((item) => item.code === 200)
         .map((item) => ({
           ...item.body,             // Incluye id, title, price, status, thumbnail, etc.
-          userNickname: nickname,   // Agregamos el nickname de la cuenta
-          accountId: userId,        // Puedes guardar también el ID de la cuenta
+          userNickname: nickname,   // Agrega el nickname de la cuenta
+          accountId: userId,        // Guarda también el ID de la cuenta
         }));
       allDetails = [...allDetails, ...validItems];
     }
     return allDetails;
   };
 
-  // 3. Actualización en segundo plano: Buscar nuevas publicaciones en MercadoLibre y actualizar Firestore
+  // 3. Actualización en segundo plano: Cada vez que se carga el componente, se consulta MercadoLibre y se actualiza Firestore
   useEffect(() => {
     const updatePublicacionesFromML = async () => {
       for (const cuenta of cuentas) {
@@ -102,12 +92,12 @@ const Publicaciones = () => {
         if (!accessToken || !userId) continue;
 
         try {
-          // Se obtienen todas las IDs (según lo permitido por la API)
-          const allItemIds = await fetchAllItemIDs(userId, accessToken, desde, hasta);
+          // Obtener todas las IDs de publicaciones (según lo permitido por la API)
+          const allItemIds = await fetchAllItemIDs(userId, accessToken);
           if (allItemIds.length === 0) continue;
-          // Se obtienen los detalles de los ítems en lotes
+          // Obtener los detalles de los ítems en lotes
           const detalles = await fetchItemDetailsInBatches(allItemIds, accessToken, nickname, userId);
-          // Se actualiza cada publicación en Firestore (si ya existe, se actualiza; si no, se crea)
+          // Para cada publicación, actualizar (o crear) el documento en Firestore
           for (const pub of detalles) {
             await setDoc(doc(db, "publicaciones", pub.id), pub, { merge: true });
           }
@@ -118,18 +108,18 @@ const Publicaciones = () => {
     };
 
     if (cuentas.length > 0) {
-      // Ejecuta la actualización en segundo plano
+      // Se ejecuta en segundo plano sin interrumpir la experiencia del usuario
       updatePublicacionesFromML();
     }
-  }, [cuentas, desde, hasta]);
+  }, [cuentas]);
 
-  // 4. Filtrado de publicaciones según el texto ingresado
+  // 4. Filtrado: Se filtran las publicaciones en base al texto del buscador
   const publicacionesFiltradas = publicaciones.filter((item) => {
     const titulo = item.title?.toLowerCase() || "";
     return titulo.includes(busqueda.toLowerCase());
   });
 
-  // 5. Paginación en la interfaz
+  // 5. Paginación en la UI: se muestran en "pestañas" o páginas de resultados
   const totalPages = Math.ceil(publicacionesFiltradas.length / pageSize);
   const startIndex = currentPage * pageSize;
   const endIndex = startIndex + pageSize;
@@ -161,27 +151,7 @@ const Publicaciones = () => {
         />
       </div>
 
-      {/* Filtros por fecha (opcional) */}
-      <div style={{ marginBottom: "10px" }}>
-        <label>
-          Desde:{" "}
-          <input
-            type="date"
-            value={desde}
-            onChange={(e) => setDesde(e.target.value)}
-          />
-        </label>
-        <label style={{ marginLeft: "20px" }}>
-          Hasta:{" "}
-          <input
-            type="date"
-            value={hasta}
-            onChange={(e) => setHasta(e.target.value)}
-          />
-        </label>
-      </div>
-
-      {/* Lista de publicaciones (obtenidas de Firestore) con paginación */}
+      {/* Lista de publicaciones (cargadas desde Firestore) con paginación */}
       {publicacionesEnPagina.length === 0 ? (
         <p>No se encontraron publicaciones.</p>
       ) : (
