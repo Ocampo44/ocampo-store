@@ -17,6 +17,7 @@ const Ventas = () => {
         id: doc.id,
         ...doc.data()
       }));
+      console.log("Cuentas obtenidas:", acc);
       setAccounts(acc);
     });
     return () => unsub();
@@ -24,7 +25,10 @@ const Ventas = () => {
 
   // Obtener las ventas de la cuenta seleccionada
   useEffect(() => {
-    if (!selectedAccount) return;
+    if (!selectedAccount) {
+      console.log("No se ha seleccionado ninguna cuenta.");
+      return;
+    }
 
     const account = accounts.find(acc => acc.id === selectedAccount);
     console.log("Cuenta seleccionada:", account);
@@ -36,27 +40,32 @@ const Ventas = () => {
     const fetchSales = async () => {
       setLoading(true);
       try {
-        const url = `https://api.mercadolibre.com/orders/search?seller=${selectedAccount}`;
+        const url = `https://api.mercadolibre.com/orders/search?seller=${selectedAccount}&offset=0&limit=50`;
+        console.log("Llamando a la API:", url);
         const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${account.token.access_token}`
           }
         });
         if (!response.ok) {
-          console.error('Error al obtener ventas:', response.status);
+          console.error("Error en la respuesta de la API:", response.status);
           setLoading(false);
           return;
         }
         const data = await response.json();
         console.log("Respuesta de la API:", data);
+        if (data.paging) {
+          console.log("Total de ventas:", data.paging.total);
+        }
         let results = data.results || [];
-        // Si se selecciona un estado específico, filtra localmente
+        // Filtrado local por estado si se selecciona uno distinto de "all"
         if (statusFilter !== 'all') {
           results = results.filter(sale => sale.status === statusFilter);
         }
+        console.log("Ventas obtenidas:", results);
         setSales(results);
       } catch (error) {
-        console.error('Error al obtener ventas:', error);
+        console.error("Error al obtener ventas:", error);
       } finally {
         setLoading(false);
       }
@@ -103,19 +112,19 @@ const Ventas = () => {
         <p>Cargando ventas...</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border">
-            <thead>
-              <tr>
-                <th className="py-2 px-4 border-b">ID Pedido</th>
-                <th className="py-2 px-4 border-b">Comprador</th>
-                <th className="py-2 px-4 border-b">Monto Total</th>
-                <th className="py-2 px-4 border-b">Estado</th>
-                <th className="py-2 px-4 border-b">Fecha</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sales.length > 0 ? (
-                sales.map((sale) => (
+          {sales.length > 0 ? (
+            <table className="min-w-full bg-white border">
+              <thead>
+                <tr>
+                  <th className="py-2 px-4 border-b">ID Pedido</th>
+                  <th className="py-2 px-4 border-b">Comprador</th>
+                  <th className="py-2 px-4 border-b">Monto Total</th>
+                  <th className="py-2 px-4 border-b">Estado</th>
+                  <th className="py-2 px-4 border-b">Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sales.map((sale) => (
                   <tr key={sale.id} className="text-center">
                     <td className="py-2 px-4 border-b">{sale.id}</td>
                     <td className="py-2 px-4 border-b">
@@ -127,16 +136,12 @@ const Ventas = () => {
                       {new Date(sale.date_created).toLocaleDateString()}
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td className="py-2 px-4 border-b text-center" colSpan="5">
-                    No se encontraron ventas.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p>No se encontraron ventas.</p>
+          )}
         </div>
       )}
     </div>
