@@ -32,11 +32,65 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
+  /*  
+    Función recursiva para obtener todos los IDs de ítems de una cuenta.
+    Se utiliza paginación normal hasta un máximo (maxOffset), luego se utiliza el
+    parámetro "date_created_to" (hipotético) para traer los ítems anteriores a la fecha
+    del ítem más antiguo obtenido en el segmento actual.
+  */
+  const fetchItemIdsForCuenta = async (userId, accessToken, dateTo = null) => {
+    let allItemIds = [];
+    let offset = 0;
+    const limit = 50; // Límite por petición (por defecto de la API)
+    const maxOffset = 1050; // Límite máximo de offset permitido en una sola consulta
+    let seguir = true;
+
+    while (seguir) {
+      let url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}`;
+      // Si se pasó un parámetro de fecha, agregarlo a la consulta
+      if (dateTo) {
+        url += `&date_created_to=${encodeURIComponent(dateTo)}`;
+      }
+      const searchResponse = await fetch(url);
+      if (!searchResponse.ok) {
+        console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
+        break;
+      }
+      const searchData = await searchResponse.json();
+
+      const idsSegmento = searchData.results || [];
+      allItemIds = [...allItemIds, ...idsSegmento];
+
+      // Si se obtuvo menos del límite o se alcanzó el maxOffset, se termina este segmento
+      if (idsSegmento.length < limit || offset + limit >= maxOffset) {
+        break;
+      }
+      offset += limit;
+    }
+
+    // Si el total de ítems según la API es mayor al límite que pudimos traer en este segmento,
+    // intentamos traer los ítems más antiguos usando el parámetro de fecha.
+    if (allItemIds.length === maxOffset && searchData?.paging?.total > maxOffset) {
+      // Obtener la fecha de creación más antigua en el segmento actual
+      const fechas = allItemIds
+        .map((item) => new Date(item.date_created))
+        .filter((fecha) => !isNaN(fecha));
+      if (fechas.length > 0) {
+        const oldestDate = new Date(Math.min(...fechas));
+        const oldestDateISO = oldestDate.toISOString();
+        // Llamada recursiva para traer los ítems anteriores a oldestDateISO
+        const additionalIds = await fetchItemIdsForCuenta(userId, accessToken, oldestDateISO);
+        allItemIds = [...allItemIds, ...additionalIds];
+      }
+    }
+    return allItemIds;
+  };
+
   // 2. Obtener y mostrar las publicaciones conforme se van trayendo
   useEffect(() => {
     const fetchPublicaciones = async () => {
       setCargando(true);
-      // Reiniciar las publicaciones antes de iniciar la carga
+      // Reiniciamos las publicaciones antes de iniciar la carga
       setPublicaciones([]);
 
       for (const cuenta of cuentas) {
@@ -47,49 +101,33 @@ const Publicaciones = () => {
         if (!accessToken || !userId) continue;
 
         try {
-          let offset = 0;
-          let totalItems = Infinity;
+          // Usamos la función recursiva para traer todos los IDs (segmentando si es necesario)
+          const itemIds = await fetchItemIdsForCuenta(userId, accessToken);
 
-          // Bucle para paginar la obtención de IDs
-          while (offset < totalItems) {
-            const searchResponse = await fetch(
-              `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}`
-            );
-            if (!searchResponse.ok) {
-              console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
-              break;
+          if (itemIds.length === 0) continue;
+
+          // Procesar los IDs en lotes para obtener los detalles de cada publicación
+          const batchSize = 20;
+          for (let i = 0; i < itemIds.length; i += batchSize) {
+            const batchIds = itemIds.slice(i, i + batchSize).map((item) => item.id).join(",");
+            const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
+            const itemsResponse = await fetch(itemsUrl);
+
+            if (!itemsResponse.ok) {
+              console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
+              continue;
             }
 
-            const searchData = await searchResponse.json();
-            const itemIds = searchData.results || [];
-            totalItems = searchData.paging?.total || itemIds.length;
-            offset += searchData.paging?.limit || 50;
+            const itemsData = await itemsResponse.json();
+            const validItems = itemsData
+              .filter((item) => item.code === 200)
+              .map((item) => ({
+                ...item.body, // contiene id, title, price, thumbnail, status, etc.
+                userNickname: nickname,
+              }));
 
-            if (itemIds.length === 0) continue;
-
-            // Procesar en lotes para obtener detalles de los ítems
-            const batchSize = 20;
-            for (let i = 0; i < itemIds.length; i += batchSize) {
-              const batchIds = itemIds.slice(i, i + batchSize).join(",");
-              const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
-              const itemsResponse = await fetch(itemsUrl);
-
-              if (!itemsResponse.ok) {
-                console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
-                continue;
-              }
-
-              const itemsData = await itemsResponse.json();
-              const validItems = itemsData
-                .filter((item) => item.code === 200)
-                .map((item) => ({
-                  ...item.body, // contiene id, title, price, thumbnail, status, etc.
-                  userNickname: nickname,
-                }));
-
-              // Ir actualizando el estado conforme se reciben nuevos ítems
-              setPublicaciones((prev) => [...prev, ...validItems]);
-            }
+            // Actualizamos el estado conforme se reciben nuevos ítems
+            setPublicaciones((prev) => [...prev, ...validItems]);
           }
         } catch (error) {
           console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
