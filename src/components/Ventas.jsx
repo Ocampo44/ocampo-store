@@ -1,4 +1,3 @@
-// src/components/Ventas.jsx
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebaseConfig';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -10,7 +9,7 @@ const Ventas = () => {
   const [selectedAccount, setSelectedAccount] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Escucha en tiempo real las cuentas de MercadoLibre desde Firestore
+  // Escucha en tiempo real las cuentas de MercadoLibre desde Firestore (se ejecuta solo una vez)
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const acc = snapshot.docs.map(doc => ({
@@ -25,7 +24,7 @@ const Ventas = () => {
       }
     });
     return () => unsub();
-  }, [selectedAccount]);
+  }, []); // <-- Dependencias vacías para que se ejecute solo al montar
 
   // Obtener las ventas de la cuenta seleccionada
   useEffect(() => {
@@ -58,11 +57,7 @@ const Ventas = () => {
         }
         const data = await response.json();
         console.log("Respuesta de la API:", data);
-        if (data.paging) {
-          console.log("Total de ventas:", data.paging.total);
-        }
         let results = data.results || [];
-        // Si se selecciona un estado distinto a "all", filtra localmente
         if (statusFilter !== 'all') {
           results = results.filter(sale => sale.status === statusFilter);
         }
