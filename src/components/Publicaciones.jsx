@@ -1,12 +1,16 @@
 // src/components/Publicaciones.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
+
+const ITEMS_PER_PAGE = 20;
 
 const Publicaciones = () => {
   const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState([]);
   const [busqueda, setBusqueda] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("Todos");
+  const [currentPage, setCurrentPage] = useState(1);
 
   // 1. Escuchar cambios en Firestore para obtener las cuentas con token
   useEffect(() => {
@@ -20,8 +24,7 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Para cada cuenta, obtener los IDs de sus publicaciones,
-  //    luego obtener el detalle de cada publicación y guardarlo en "publicaciones".
+  // 2. Obtener publicaciones de cada cuenta
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let todasLasPublicaciones = [];
@@ -31,10 +34,10 @@ const Publicaciones = () => {
         const userId = cuenta.profile?.id;
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
 
-        if (!accessToken || !userId) continue; // Si faltan datos, pasar a la siguiente cuenta
+        if (!accessToken || !userId) continue;
 
         try {
-          // Primero, obtener los IDs de las publicaciones
+          // Obtener IDs de publicaciones
           const searchResponse = await fetch(
             `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}`
           );
@@ -44,12 +47,10 @@ const Publicaciones = () => {
           }
 
           const searchData = await searchResponse.json();
-          const itemIds = searchData.results || []; // Array de IDs de ítems
-
-          // Si no hay ítems, pasamos a la siguiente cuenta
+          const itemIds = searchData.results || [];
           if (itemIds.length === 0) continue;
 
-          // Usamos batch de 20 en 20 para no saturar la API
+          // Procesar en lotes de 20
           const batchSize = 20;
           for (let i = 0; i < itemIds.length; i += batchSize) {
             const batchIds = itemIds.slice(i, i + batchSize).join(",");
@@ -61,26 +62,22 @@ const Publicaciones = () => {
               continue;
             }
 
-            // itemsResponse.json() retorna un array: [{ code, body: { ...itemData }}, ...]
             const itemsData = await itemsResponse.json();
-
-            // Filtramos solo los que tienen code=200 (peticiones exitosas)
             const validItems = itemsData
               .filter((item) => item.code === 200)
               .map((item) => ({
-                ...item.body, // Contiene id, title, price, thumbnail, status, etc.
+                ...item.body,
                 userNickname: nickname,
               }));
 
-            // Agregamos estos ítems al array general
             todasLasPublicaciones = [...todasLasPublicaciones, ...validItems];
           }
         } catch (error) {
           console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
       }
-
       setPublicaciones(todasLasPublicaciones);
+      setCurrentPage(1); // Reiniciar la página cuando se cargan nuevas publicaciones
     };
 
     if (cuentas.length > 0) {
@@ -88,31 +85,67 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // 3. Filtrar publicaciones según el texto ingresado
-  const publicacionesFiltradas = publicaciones.filter((item) => {
-    const titulo = item.title?.toLowerCase() || "";
-    return titulo.includes(busqueda.toLowerCase());
-  });
+  // 3. Filtrar publicaciones según búsqueda y estado
+  const publicacionesFiltradas = useMemo(() => {
+    return publicaciones.filter((item) => {
+      const titulo = item.title?.toLowerCase() || "";
+      const busquedaOk = titulo.includes(busqueda.toLowerCase());
+      const statusOk = selectedStatus === "Todos" || item.status === selectedStatus;
+      return busquedaOk && statusOk;
+    });
+  }, [publicaciones, busqueda, selectedStatus]);
+
+  // 4. Paginación: calcular las publicaciones a mostrar
+  const totalPaginas = Math.ceil(publicacionesFiltradas.length / ITEMS_PER_PAGE);
+  const indexInicio = (currentPage - 1) * ITEMS_PER_PAGE;
+  const publicacionesPaginadas = publicacionesFiltradas.slice(indexInicio, indexInicio + ITEMS_PER_PAGE);
+
+  // 5. Obtener lista de estados únicos para el dropdown
+  const estadosDisponibles = useMemo(() => {
+    const estados = publicaciones.map((pub) => pub.status);
+    return ["Todos", ...Array.from(new Set(estados))];
+  }, [publicaciones]);
 
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
-
-      <div style={{ marginBottom: "10px" }}>
+      {/* Total de publicaciones */}
+      <p><strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}</p>
+      
+      {/* Filtros */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
         <input
           type="text"
           placeholder="Buscar ítems..."
           value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
+          onChange={(e) => {
+            setBusqueda(e.target.value);
+            setCurrentPage(1);
+          }}
           style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
         />
+        <select
+          value={selectedStatus}
+          onChange={(e) => {
+            setSelectedStatus(e.target.value);
+            setCurrentPage(1);
+          }}
+          style={{ padding: "8px" }}
+        >
+          {estadosDisponibles.map((estado) => (
+            <option key={estado} value={estado}>
+              {estado}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {publicacionesFiltradas.length === 0 ? (
+      {/* Listado de publicaciones */}
+      {publicacionesPaginadas.length === 0 ? (
         <p>No se encontraron publicaciones.</p>
       ) : (
         <ul style={{ listStyle: "none", padding: 0 }}>
-          {publicacionesFiltradas.map((pub) => (
+          {publicacionesPaginadas.map((pub) => (
             <li
               key={pub.id}
               style={{
@@ -125,14 +158,11 @@ const Publicaciones = () => {
                 gap: "10px",
               }}
             >
-              {/* Imagen */}
               <img
                 src={pub.thumbnail}
                 alt={pub.title}
                 style={{ width: "60px", height: "60px", objectFit: "cover" }}
               />
-
-              {/* Información del ítem */}
               <div>
                 <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
                 <p style={{ margin: 0 }}>
@@ -151,6 +181,26 @@ const Publicaciones = () => {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Paginación */}
+      {totalPaginas > 1 && (
+        <div style={{ display: "flex", gap: "5px", marginTop: "20px", flexWrap: "wrap" }}>
+          {Array.from({ length: totalPaginas }, (_, idx) => idx + 1).map((num) => (
+            <button
+              key={num}
+              onClick={() => setCurrentPage(num)}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #ddd",
+                backgroundColor: num === currentPage ? "#eee" : "#fff",
+                cursor: "pointer",
+              }}
+            >
+              {num}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
