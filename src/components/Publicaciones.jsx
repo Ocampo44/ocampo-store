@@ -1,6 +1,6 @@
 // src/components/Publicaciones.jsx
 import React, { useState, useEffect } from "react";
-import { collection, onSnapshot, doc, writeBatch } from "firebase/firestore";
+import { collection, onSnapshot, doc, writeBatch, getDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
 // Función auxiliar para dividir un array en trozos
@@ -12,15 +12,15 @@ const chunkArray = (array, chunkSize) => {
   return results;
 };
 
-// Función para limpiar/sanitizar los datos de la publicación
-// Extraemos solo las propiedades necesarias
+// Función para limpiar/sanitizar los datos de la publicación,
+// extrayendo sólo las propiedades necesarias.
 const sanitizePublication = (pub, nickname, userId) => {
   return {
     id: pub.id,
     title: pub.title,
     price: pub.price,
     status: pub.status,
-    thumbnail: pub.thumbnail, // se revisa la URL al renderizar la imagen
+    thumbnail: pub.thumbnail, // Se revisa la URL al renderizar la imagen
     currency_id: pub.currency_id,
     userNickname: nickname,
     accountId: userId,
@@ -30,12 +30,24 @@ const sanitizePublication = (pub, nickname, userId) => {
 // Función para introducir retardo (en milisegundos)
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Función para comparar si dos publicaciones son diferentes
+const hasPublicationChanged = (oldPub, newPub) => {
+  // Aquí se comparan los campos que nos interesan
+  return (
+    oldPub.title !== newPub.title ||
+    oldPub.price !== newPub.price ||
+    oldPub.status !== newPub.status ||
+    oldPub.thumbnail !== newPub.thumbnail ||
+    oldPub.currency_id !== newPub.currency_id
+  );
+};
+
 const Publicaciones = () => {
   // Estados para cuentas y publicaciones cacheadas
   const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState([]);
   
-  // Estado para el buscador general y filtros
+  // Estados para buscador y filtros
   const [busqueda, setBusqueda] = useState("");
   const [filterName, setFilterName] = useState("");
   const [filterId, setFilterId] = useState("");
@@ -115,7 +127,7 @@ const Publicaciones = () => {
     return allDetails;
   };
 
-  // 3. Actualización en segundo plano: Consulta MercadoLibre y guarda en Firestore usando batch writes divididos
+  // 3. Actualización en segundo plano: consulta MercadoLibre y actualiza Firestore
   useEffect(() => {
     const updatePublicacionesFromML = async () => {
       for (const cuenta of cuentas) {
@@ -132,34 +144,52 @@ const Publicaciones = () => {
           console.log(`Cuenta ${cuenta.id} - Detalles obtenidos (sanitizados):`, detalles);
           if (detalles.length === 0) continue;
           
-          // Dividir los detalles en batches pequeños (por ejemplo, 10 documentos por batch)
-          const chunks = chunkArray(detalles, 10);
+          // Dividir los detalles en batches pequeños (5 documentos por batch)
+          const chunks = chunkArray(detalles, 5);
           for (const [index, chunk] of chunks.entries()) {
             const batch = writeBatch(db);
-            chunk.forEach((pub) => {
+            for (const pub of chunk) {
               if (!pub.id) {
                 console.error("Elemento sin ID:", pub);
-                return;
+                continue;
               }
               const pubRef = doc(db, "publicaciones", pub.id);
+              // Opcional: comprobar si existe y si ha cambiado para actualizar sólo cuando sea necesario
+              const docSnap = await getDoc(pubRef);
+              if (docSnap.exists()) {
+                const existingData = docSnap.data();
+                if (!hasPublicationChanged(existingData, pub)) {
+                  // No hay cambios, omitir la escritura
+                  continue;
+                }
+              }
               batch.set(pubRef, pub, { merge: true });
-            });
-            await batch.commit();
-            console.log(`Cuenta ${cuenta.id} - Batch ${index + 1} commit exitoso.`);
-            // Espera 500ms entre batch commits para no saturar la cuota
-            await sleep(500);
+            }
+            // Commit del batch solo si contiene escrituras
+            if (!batch._writes || batch._writes.length === 0) {
+              console.log(`Cuenta ${cuenta.id} - Batch ${index + 1} sin cambios, se omite commit.`);
+            } else {
+              await batch.commit();
+              console.log(`Cuenta ${cuenta.id} - Batch ${index + 1} commit exitoso.`);
+            }
+            // Espera 1000ms entre batch commits para reducir la carga
+            await sleep(1000);
           }
         } catch (error) {
           console.error("Error actualizando publicaciones para la cuenta:", cuenta.id, error);
         }
       }
     };
+    // Para evitar actualizaciones excesivas, se puede programar la actualización cada cierto tiempo
     if (cuentas.length > 0) {
       updatePublicacionesFromML();
+      // Ejemplo: repetir cada 10 minutos (600000 ms)
+      const interval = setInterval(updatePublicacionesFromML, 600000);
+      return () => clearInterval(interval);
     }
   }, [cuentas]);
 
-  // 4. Filtrado de publicaciones
+  // 4. Filtrado de publicaciones para la vista
   const publicacionesFiltradas = publicaciones.filter((item) => {
     const title = item.title?.toLowerCase() || "";
     const id = (item.id || "").toLowerCase();
@@ -272,9 +302,10 @@ const Publicaciones = () => {
         <ul style={{ listStyle: "none", padding: 0 }}>
           {publicacionesEnPagina.map((pub) => {
             // Forzar HTTPS en la URL de la imagen, si es necesario
-            const secureThumbnail = pub.thumbnail && pub.thumbnail.startsWith("http://")
-              ? pub.thumbnail.replace(/^http:\/\//i, "https://")
-              : pub.thumbnail;
+            const secureThumbnail =
+              pub.thumbnail && pub.thumbnail.startsWith("http://")
+                ? pub.thumbnail.replace(/^http:\/\//i, "https://")
+                : pub.thumbnail;
             return (
               <li
                 key={pub.id}
