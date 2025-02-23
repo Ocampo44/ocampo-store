@@ -123,6 +123,14 @@ const Publicaciones = () => {
   const publicacionesPaginadas = publicacionesFiltradas.slice(indexPrimer, indexUltimo);
   const totalPaginas = Math.ceil(publicacionesFiltradas.length / publicacionesPorPagina);
 
+  const handleAnterior = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  const handleSiguiente = () => {
+    if (currentPage < totalPaginas) setCurrentPage(currentPage + 1);
+  };
+
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
@@ -219,22 +227,43 @@ const Publicaciones = () => {
             ))}
           </ul>
 
-          {/* Paginación con pestañas */}
-          <div style={{ display: "flex", justifyContent: "center", marginTop: "20px", gap: "5px" }}>
-            {Array.from({ length: totalPaginas }, (_, index) => (
-              <button
-                key={index + 1}
-                onClick={() => setCurrentPage(index + 1)}
-                style={{
-                  padding: "8px 12px",
-                  border: "1px solid #ccc",
-                  backgroundColor: currentPage === index + 1 ? "#ddd" : "#fff",
-                  cursor: "pointer",
-                }}
-              >
-                {index + 1}
-              </button>
-            ))}
+          {/* Paginación con botones "Anterior" y "Siguiente" */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              marginTop: "20px",
+              gap: "10px",
+            }}
+          >
+            <button
+              onClick={handleAnterior}
+              disabled={currentPage === 1}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #ccc",
+                cursor: currentPage === 1 ? "not-allowed" : "pointer",
+              }}
+            >
+              Anterior
+            </button>
+
+            <span>
+              Página {currentPage} de {totalPaginas}
+            </span>
+
+            <button
+              onClick={handleSiguiente}
+              disabled={currentPage === totalPaginas}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #ccc",
+                cursor: currentPage === totalPaginas ? "not-allowed" : "pointer",
+              }}
+            >
+              Siguiente
+            </button>
           </div>
         </>
       )}
