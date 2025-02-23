@@ -55,12 +55,10 @@ const Publicaciones = () => {
         break;
       }
       const data = await resp.json();
-      // Extraer el ID de cada publicación
-      const itemIds = (data.results || []).map((item) => item.id);
+      const itemIds = data.results || [];
       allItemIds = [...allItemIds, ...itemIds];
-      // Si la cantidad de resultados es menor al límite, salir del ciclo
-      if (itemIds.length < limit) break;
       offset += limit;
+      if (offset >= data.paging.total) break;
     }
     return allItemIds;
   };
