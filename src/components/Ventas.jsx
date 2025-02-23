@@ -19,7 +19,7 @@ const Ventas = () => {
       }));
       console.log("Cuentas obtenidas:", acc);
       setAccounts(acc);
-      // Si aún no hay cuenta seleccionada, se asigna la primera cuenta obtenida
+      // Asigna automáticamente la primera cuenta si no hay seleccionada
       if (!selectedAccount && acc.length > 0) {
         setSelectedAccount(acc[0].id);
       }
@@ -62,7 +62,7 @@ const Ventas = () => {
           console.log("Total de ventas:", data.paging.total);
         }
         let results = data.results || [];
-        // Filtrado local por estado si se selecciona uno distinto a "all"
+        // Si se selecciona un estado distinto a "all", filtra localmente
         if (statusFilter !== 'all') {
           results = results.filter(sale => sale.status === statusFilter);
         }
