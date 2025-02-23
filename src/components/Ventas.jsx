@@ -1,9 +1,11 @@
+// src/components/Ventas.jsx
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebaseConfig';
 import { collection, onSnapshot } from 'firebase/firestore';
 
 const Ventas = () => {
   const [sales, setSales] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -29,11 +31,10 @@ const Ventas = () => {
     if (!account || !account.token || !account.token.access_token) return;
 
     const fetchSales = async () => {
+      setLoading(true);
       try {
         // Endpoint para buscar órdenes del vendedor
         let url = `https://api.mercadolibre.com/orders/search?seller=${selectedAccount}`;
-        // Nota: muchos endpoints de MercadoLibre no permiten filtrar directamente por estado.
-        // Por ello se recomienda obtener todos los resultados y luego filtrar localmente.
         const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${account.token.access_token}`
@@ -41,16 +42,21 @@ const Ventas = () => {
         });
         if (!response.ok) {
           console.error('Error al obtener ventas:', response.status);
+          setLoading(false);
           return;
         }
         const data = await response.json();
         let results = data.results || [];
+        // Filtrado local por estado si no es "all"
         if (statusFilter !== 'all') {
           results = results.filter(sale => sale.status === statusFilter);
         }
+        // Actualiza el estado para que se muestren las ventas
         setSales(results);
       } catch (error) {
         console.error('Error al obtener ventas:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -87,46 +93,50 @@ const Ventas = () => {
             <option value="paid">Pagada</option>
             <option value="refunded">Reembolsada</option>
             <option value="approved">Aprobada</option>
-            {/* Puedes agregar más opciones según los estados disponibles */}
+            {/* Agrega más opciones según los estados disponibles */}
           </select>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white border">
-          <thead>
-            <tr>
-              <th className="py-2 px-4 border-b">ID Pedido</th>
-              <th className="py-2 px-4 border-b">Comprador</th>
-              <th className="py-2 px-4 border-b">Monto Total</th>
-              <th className="py-2 px-4 border-b">Estado</th>
-              <th className="py-2 px-4 border-b">Fecha</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sales.length > 0 ? (
-              sales.map((sale) => (
-                <tr key={sale.id} className="text-center">
-                  <td className="py-2 px-4 border-b">{sale.id}</td>
-                  <td className="py-2 px-4 border-b">
-                    {sale.buyer ? sale.buyer.nickname : 'N/A'}
-                  </td>
-                  <td className="py-2 px-4 border-b">{sale.total_amount}</td>
-                  <td className="py-2 px-4 border-b">{sale.status}</td>
-                  <td className="py-2 px-4 border-b">
-                    {new Date(sale.date_created).toLocaleDateString()}
+      {loading ? (
+        <p>Cargando ventas...</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white border">
+            <thead>
+              <tr>
+                <th className="py-2 px-4 border-b">ID Pedido</th>
+                <th className="py-2 px-4 border-b">Comprador</th>
+                <th className="py-2 px-4 border-b">Monto Total</th>
+                <th className="py-2 px-4 border-b">Estado</th>
+                <th className="py-2 px-4 border-b">Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sales.length > 0 ? (
+                sales.map((sale) => (
+                  <tr key={sale.id} className="text-center">
+                    <td className="py-2 px-4 border-b">{sale.id}</td>
+                    <td className="py-2 px-4 border-b">
+                      {sale.buyer ? sale.buyer.nickname : 'N/A'}
+                    </td>
+                    <td className="py-2 px-4 border-b">{sale.total_amount}</td>
+                    <td className="py-2 px-4 border-b">{sale.status}</td>
+                    <td className="py-2 px-4 border-b">
+                      {new Date(sale.date_created).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="py-2 px-4 border-b text-center" colSpan="5">
+                    No se encontraron ventas.
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td className="py-2 px-4 border-b text-center" colSpan="5">
-                  No se encontraron ventas.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };
