@@ -6,7 +6,8 @@ import { db } from "../firebaseConfig";
 const Publicaciones = () => {
   const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState([]);
-  const [busqueda, setBusqueda] = useState("");
+  const [busquedaNombre, setBusquedaNombre] = useState(""); // Filtro por título
+  const [busqueda, setBusqueda] = useState(""); // Filtro para ID (texto) o valor seleccionado para status/nickname
   const [filterType, setFilterType] = useState("id"); // "id", "status" o "nickname"
   const [currentPage, setCurrentPage] = useState(1);
   const publicacionesPorPagina = 20;
@@ -55,7 +56,6 @@ const Publicaciones = () => {
             const nuevosIds = searchData.results || [];
             allItemIds = [...allItemIds, ...nuevosIds];
             offset += nuevosIds.length;
-            // Si no hay más resultados, salimos del bucle
             if (nuevosIds.length === 0) break;
           }
 
@@ -73,10 +73,8 @@ const Publicaciones = () => {
               continue;
             }
 
-            // itemsResponse.json() retorna un array: [{ code, body: { ...itemData }}, ...]
             const itemsData = await itemsResponse.json();
 
-            // Filtramos solo los que tienen code=200 y agregamos nickname
             const validItems = itemsData
               .filter((item) => item.code === 200)
               .map((item) => ({
@@ -99,23 +97,30 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // 3. Filtrar publicaciones según el texto ingresado y el filtro activo
+  // Opciones únicas para status y nickname
+  const uniqueStatus = Array.from(new Set(publicaciones.map((pub) => pub.status))).filter(Boolean);
+  const uniqueNicknames = Array.from(new Set(publicaciones.map((pub) => pub.userNickname))).filter(Boolean);
+
+  // 3. Filtrar publicaciones según el filtro por nombre (título) y el filtro activo
   const publicacionesFiltradas = publicaciones.filter((item) => {
-    const valor =
-      filterType === "id"
-        ? item.id?.toLowerCase() || ""
-        : filterType === "status"
-        ? item.status?.toLowerCase() || ""
-        : filterType === "nickname"
-        ? item.userNickname?.toLowerCase() || ""
-        : "";
-    return valor.includes(busqueda.toLowerCase());
+    // Filtro por nombre (título)
+    const filtroNombre = item.title?.toLowerCase().includes(busquedaNombre.toLowerCase());
+
+    let filtroAdicional = true;
+    if (filterType === "id") {
+      filtroAdicional = item.id?.toLowerCase().includes(busqueda.toLowerCase());
+    } else if (filterType === "status") {
+      filtroAdicional = busqueda === "all" || item.status === busqueda;
+    } else if (filterType === "nickname") {
+      filtroAdicional = busqueda === "all" || item.userNickname === busqueda;
+    }
+    return filtroNombre && filtroAdicional;
   });
 
   // Reiniciamos la página actual cuando cambie la búsqueda o el filtro
   useEffect(() => {
     setCurrentPage(1);
-  }, [busqueda, filterType]);
+  }, [busqueda, busquedaNombre, filterType]);
 
   // Calcular la paginación
   const indexUltimo = currentPage * publicacionesPorPagina;
@@ -127,10 +132,24 @@ const Publicaciones = () => {
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
 
+      {/* Filtro adicional por nombre (título) */}
+      <div style={{ marginBottom: "10px" }}>
+        <input
+          type="text"
+          placeholder="Buscar por nombre (título)"
+          value={busquedaNombre}
+          onChange={(e) => setBusquedaNombre(e.target.value)}
+          style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
+        />
+      </div>
+
       {/* Pestañas de filtro */}
       <div style={{ marginBottom: "10px", display: "flex", gap: "10px" }}>
         <button
-          onClick={() => setFilterType("id")}
+          onClick={() => {
+            setFilterType("id");
+            setBusqueda("");
+          }}
           style={{
             backgroundColor: filterType === "id" ? "#ddd" : "#fff",
             padding: "8px 12px",
@@ -141,7 +160,10 @@ const Publicaciones = () => {
           ID de Publicación
         </button>
         <button
-          onClick={() => setFilterType("status")}
+          onClick={() => {
+            setFilterType("status");
+            setBusqueda("all");
+          }}
           style={{
             backgroundColor: filterType === "status" ? "#ddd" : "#fff",
             padding: "8px 12px",
@@ -152,7 +174,10 @@ const Publicaciones = () => {
           Estado de Publicación
         </button>
         <button
-          onClick={() => setFilterType("nickname")}
+          onClick={() => {
+            setFilterType("nickname");
+            setBusqueda("all");
+          }}
           style={{
             backgroundColor: filterType === "nickname" ? "#ddd" : "#fff",
             padding: "8px 12px",
@@ -164,14 +189,43 @@ const Publicaciones = () => {
         </button>
       </div>
 
+      {/* Filtro según el tipo seleccionado */}
       <div style={{ marginBottom: "10px" }}>
-        <input
-          type="text"
-          placeholder={`Buscar por ${filterType}`}
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
-        />
+        {filterType === "id" ? (
+          <input
+            type="text"
+            placeholder="Buscar por ID de publicación"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
+          />
+        ) : filterType === "status" ? (
+          <select
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
+          >
+            <option value="all">Todos</option>
+            {uniqueStatus.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        ) : filterType === "nickname" ? (
+          <select
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
+          >
+            <option value="all">Todas</option>
+            {uniqueNicknames.map((nick) => (
+              <option key={nick} value={nick}>
+                {nick}
+              </option>
+            ))}
+          </select>
+        ) : null}
       </div>
 
       {publicacionesFiltradas.length === 0 ? (
@@ -192,14 +246,11 @@ const Publicaciones = () => {
                   gap: "10px",
                 }}
               >
-                {/* Imagen */}
                 <img
                   src={pub.thumbnail}
                   alt={pub.title}
                   style={{ width: "60px", height: "60px", objectFit: "cover" }}
                 />
-
-                {/* Información del ítem */}
                 <div>
                   <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
                   <p style={{ margin: 0 }}>
@@ -219,7 +270,7 @@ const Publicaciones = () => {
             ))}
           </ul>
 
-          {/* Paginación con pestañas */}
+          {/* Paginación */}
           <div style={{ display: "flex", justifyContent: "center", marginTop: "20px", gap: "5px" }}>
             {Array.from({ length: totalPaginas }, (_, index) => (
               <button
