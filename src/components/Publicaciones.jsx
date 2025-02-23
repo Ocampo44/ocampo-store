@@ -4,13 +4,20 @@ import { collection, onSnapshot, setDoc, doc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
 const Publicaciones = () => {
-  // Estado para las cuentas de MercadoLibre almacenadas en Firestore
+  // Estados para cuentas y publicaciones cacheadas
   const [cuentas, setCuentas] = useState([]);
-  // Estado para las publicaciones "cacheadas" en Firestore
   const [publicaciones, setPublicaciones] = useState([]);
-  // Estado para el buscador
+  
+  // Estado para el buscador general (por nombre)
   const [busqueda, setBusqueda] = useState("");
-  // Estado para la paginación en la UI
+  
+  // Estados para filtros individuales
+  const [filterName, setFilterName] = useState("");
+  const [filterId, setFilterId] = useState("");
+  const [filterAccount, setFilterAccount] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+
+  // Estado para paginación en la UI
   const [currentPage, setCurrentPage] = useState(0);
   const pageSize = 20; // Cantidad de publicaciones por página
 
@@ -90,7 +97,6 @@ const Publicaciones = () => {
         const userId = cuenta.profile?.id;
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
         if (!accessToken || !userId) continue;
-
         try {
           // Obtener todas las IDs de publicaciones (según lo permitido por la API)
           const allItemIds = await fetchAllItemIDs(userId, accessToken);
@@ -106,20 +112,29 @@ const Publicaciones = () => {
         }
       }
     };
-
     if (cuentas.length > 0) {
-      // Se ejecuta en segundo plano sin interrumpir la experiencia del usuario
+      // Ejecuta la actualización en segundo plano sin interrumpir la experiencia del usuario
       updatePublicacionesFromML();
     }
   }, [cuentas]);
 
-  // 4. Filtrado: Se filtran las publicaciones en base al texto del buscador
+  // 4. Filtrado: Se filtran las publicaciones según los filtros ingresados
   const publicacionesFiltradas = publicaciones.filter((item) => {
-    const titulo = item.title?.toLowerCase() || "";
-    return titulo.includes(busqueda.toLowerCase());
+    const title = item.title?.toLowerCase() || "";
+    const id = (item.id || "").toLowerCase();
+    const cuenta = item.userNickname?.toLowerCase() || "";
+    const status = item.status?.toLowerCase() || "";
+
+    return (
+      title.includes(filterName.toLowerCase()) &&
+      id.includes(filterId.toLowerCase()) &&
+      cuenta.includes(filterAccount.toLowerCase()) &&
+      status.includes(filterStatus.toLowerCase()) &&
+      title.includes(busqueda.toLowerCase())
+    );
   });
 
-  // 5. Paginación en la UI: se muestran en "pestañas" o páginas de resultados
+  // 5. Paginación en la UI
   const totalPages = Math.ceil(publicacionesFiltradas.length / pageSize);
   const startIndex = currentPage * pageSize;
   const endIndex = startIndex + pageSize;
@@ -137,11 +152,11 @@ const Publicaciones = () => {
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
 
-      {/* Buscador */}
+      {/* Buscador general */}
       <div style={{ marginBottom: "10px" }}>
         <input
           type="text"
-          placeholder="Buscar ítems..."
+          placeholder="Buscar por nombre..."
           value={busqueda}
           onChange={(e) => {
             setBusqueda(e.target.value);
@@ -151,7 +166,66 @@ const Publicaciones = () => {
         />
       </div>
 
-      {/* Lista de publicaciones (cargadas desde Firestore) con paginación */}
+      {/* Filtros adicionales */}
+      <div style={{ marginBottom: "20px" }}>
+        <h3>Filtros</h3>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <div>
+            <label>Nombre:</label>
+            <input
+              type="text"
+              placeholder="Filtrar por nombre"
+              value={filterName}
+              onChange={(e) => {
+                setFilterName(e.target.value);
+                setCurrentPage(0);
+              }}
+              style={{ padding: "6px" }}
+            />
+          </div>
+          <div>
+            <label>ID:</label>
+            <input
+              type="text"
+              placeholder="Filtrar por ID"
+              value={filterId}
+              onChange={(e) => {
+                setFilterId(e.target.value);
+                setCurrentPage(0);
+              }}
+              style={{ padding: "6px" }}
+            />
+          </div>
+          <div>
+            <label>Cuenta:</label>
+            <input
+              type="text"
+              placeholder="Filtrar por cuenta"
+              value={filterAccount}
+              onChange={(e) => {
+                setFilterAccount(e.target.value);
+                setCurrentPage(0);
+              }}
+              style={{ padding: "6px" }}
+            />
+          </div>
+          <div>
+            <label>Estado:</label>
+            <input
+              type="text"
+              placeholder="Filtrar por estado"
+              value={filterStatus}
+              onChange={(e) => {
+                setFilterStatus(e.target.value);
+                setCurrentPage(0);
+              }}
+              style={{ padding: "6px" }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Lista de publicaciones con paginación */}
       {publicacionesEnPagina.length === 0 ? (
         <p>No se encontraron publicaciones.</p>
       ) : (
