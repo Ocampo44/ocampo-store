@@ -20,7 +20,7 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Para cada cuenta, obtener los IDs de sus publicaciones, 
+  // 2. Para cada cuenta, obtener los IDs de sus publicaciones,
   //    luego obtener el detalle de cada publicación y guardarlo en "publicaciones".
   useEffect(() => {
     const fetchPublicaciones = async () => {
@@ -29,6 +29,7 @@ const Publicaciones = () => {
       for (const cuenta of cuentas) {
         const accessToken = cuenta.token?.access_token;
         const userId = cuenta.profile?.id;
+        const nickname = cuenta.profile?.nickname || "Sin Nombre";
 
         if (!accessToken || !userId) continue; // si faltan datos, pasar a la siguiente cuenta
 
@@ -48,29 +49,31 @@ const Publicaciones = () => {
           // Si no hay ítems, pasamos a la siguiente cuenta
           if (itemIds.length === 0) continue;
 
-          // AHORA necesitamos el detalle de cada ítem
-          // Opción A: fetch uno a uno (menos eficiente si hay muchos ítems)
-          // Opción B: fetch en batch usando "?ids=id1,id2,..." (máx 20 ítems por llamada)
-          // Aquí haremos un ejemplo de batch para no saturar la API con muchas peticiones.
-
-          const batchSize = 20; 
+          // Usamos batch de 20 en 20 para no saturar la API
+          const batchSize = 20;
           for (let i = 0; i < itemIds.length; i += batchSize) {
             const batchIds = itemIds.slice(i, i + batchSize).join(",");
             const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
             const itemsResponse = await fetch(itemsUrl);
+
             if (!itemsResponse.ok) {
               console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
               continue;
             }
 
-            // Esta llamada retorna un array de objetos, cada uno con la info del ítem
-            // Ej: [{ code: 200, body: { id, title, price, thumbnail, ... }}, ... ]
+            // itemsResponse.json() retorna un array: [{ code, body: { ...itemData }}, ...]
             const itemsData = await itemsResponse.json();
 
-            // Filtramos solo los que code = 200 (por si alguno da error)
+            // Filtramos solo los que tienen code=200 (peticiones exitosas)
             const validItems = itemsData
               .filter((item) => item.code === 200)
-              .map((item) => item.body);
+              .map((item) => {
+                // Agregamos nickname al objeto body
+                return {
+                  ...item.body, // Contiene id, title, price, thumbnail, status, etc.
+                  userNickname: nickname,
+                };
+              });
 
             // Agregamos estos ítems al array general
             todasLasPublicaciones = [...todasLasPublicaciones, ...validItems];
@@ -121,19 +124,31 @@ const Publicaciones = () => {
                 marginBottom: "10px",
                 borderRadius: "4px",
                 display: "flex",
-                alignItems: "center",
+                alignItems: "flex-start",
                 gap: "10px",
               }}
             >
+              {/* Imagen */}
               <img
                 src={pub.thumbnail}
                 alt={pub.title}
                 style={{ width: "60px", height: "60px", objectFit: "cover" }}
               />
+
+              {/* Información del ítem */}
               <div>
                 <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
                 <p style={{ margin: 0 }}>
                   Precio: {pub.price} {pub.currency_id}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Cuenta:</strong> {pub.userNickname}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>ID de la publicación:</strong> {pub.id}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Estado:</strong> {pub.status}
                 </p>
               </div>
             </li>
