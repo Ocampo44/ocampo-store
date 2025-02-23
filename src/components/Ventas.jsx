@@ -19,7 +19,7 @@ const Ventas = () => {
       }));
       console.log("Cuentas obtenidas:", acc);
       setAccounts(acc);
-      // Asigna automáticamente la primera cuenta si no hay seleccionada
+      // Asigna automáticamente la primera cuenta si no hay ninguna seleccionada
       if (!selectedAccount && acc.length > 0) {
         setSelectedAccount(acc[0].id);
       }
