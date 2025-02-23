@@ -1,13 +1,76 @@
 // src/components/Publicaciones.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
+
+// Función que genera rangos diarios (timestamps Unix) desde startDate hasta endDate
+const generateDailyRanges = (startDate, endDate) => {
+  const ranges = [];
+  let current = new Date(startDate);
+  const end = new Date(endDate);
+
+  while (current < end) {
+    const desde = Math.floor(current.getTime() / 1000);
+    const nextDay = new Date(current);
+    nextDay.setDate(current.getDate() + 1);
+    // El rango diario se define hasta el final del día (un segundo antes del siguiente día)
+    const hasta = Math.floor(nextDay.getTime() / 1000) - 1;
+    ranges.push({ desde, hasta });
+    current = nextDay;
+  }
+  return ranges;
+};
+
+// Función auxiliar para obtener publicaciones en un rango diario para una cuenta
+const fetchPublicacionesEnRango = async (userId, accessToken, nickname, desde, hasta) => {
+  let publicacionesRango = [];
+  let offset = 0;
+  let total = Infinity;
+  const MAX_OFFSET = 1000; // Límite impuesto por el endpoint para cada consulta
+
+  // Consulta paginada en el rango diario
+  while (offset < total && offset < MAX_OFFSET) {
+    const url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}&date_created_from=${desde}&date_created_to=${hasta}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error("Error al obtener IDs de publicaciones:", response.status);
+      break;
+    }
+    const data = await response.json();
+    if (data.paging?.total !== undefined) {
+      total = data.paging.total;
+    }
+    const nuevosIds = data.results || [];
+    if (nuevosIds.length === 0) break;
+
+    // Procesamos en lotes de 20
+    const batchSize = 20;
+    for (let i = 0; i < nuevosIds.length; i += batchSize) {
+      const batchIds = nuevosIds.slice(i, i + batchSize).join(",");
+      const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
+      const itemsResponse = await fetch(itemsUrl);
+      if (!itemsResponse.ok) {
+        console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
+        continue;
+      }
+      const itemsData = await itemsResponse.json();
+      const validItems = itemsData
+        .filter((item) => item.code === 200)
+        .map((item) => ({
+          ...item.body,
+          userNickname: nickname,
+        }));
+      publicacionesRango = [...publicacionesRango, ...validItems];
+    }
+    offset += nuevosIds.length;
+  }
+  return publicacionesRango;
+};
 
 const Publicaciones = () => {
   const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState([]);
-  const [busquedaNombre, setBusquedaNombre] = useState(""); // Filtro por título
-  const [busqueda, setBusqueda] = useState(""); // Filtro para ID (texto) o valor seleccionado para status/nickname
+  const [busqueda, setBusqueda] = useState("");
   const [filterType, setFilterType] = useState("id"); // "id", "status" o "nickname"
   const [currentPage, setCurrentPage] = useState(1);
   const publicacionesPorPagina = 20;
@@ -24,132 +87,87 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Para cada cuenta, obtener todos los IDs de sus publicaciones y luego sus detalles
+  // 2. Para cada cuenta, obtener publicaciones dividiendo la consulta por días
   useEffect(() => {
-    const fetchPublicaciones = async () => {
+    const fetchTodasPublicaciones = async () => {
       let todasLasPublicaciones = [];
+
+      // Define la fecha de inicio y la fecha final (puedes ajustar según tus necesidades)
+      const fechaInicio = "2020-01-01"; 
+      const fechaFin = new Date().toISOString().split("T")[0]; // fecha actual en formato YYYY-MM-DD
+      const rangosDiarios = generateDailyRanges(fechaInicio, fechaFin);
 
       for (const cuenta of cuentas) {
         const accessToken = cuenta.token?.access_token;
         const userId = cuenta.profile?.id;
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
+        if (!accessToken || !userId) continue;
 
-        if (!accessToken || !userId) continue; // si faltan datos, pasar a la siguiente cuenta
-
-        try {
-          // Paginar para obtener TODOS los IDs de las publicaciones
-          let allItemIds = [];
-          let offset = 0;
-          let total = Infinity;
-          while (offset < total) {
-            const searchResponse = await fetch(
-              `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}`
+        for (const rango of rangosDiarios) {
+          try {
+            const publicacionesRango = await fetchPublicacionesEnRango(
+              userId,
+              accessToken,
+              nickname,
+              rango.desde,
+              rango.hasta
             );
-            if (!searchResponse.ok) {
-              console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
-              break;
-            }
-            const searchData = await searchResponse.json();
-            if (searchData.paging?.total !== undefined) {
-              total = searchData.paging.total;
-            }
-            const nuevosIds = searchData.results || [];
-            allItemIds = [...allItemIds, ...nuevosIds];
-            offset += nuevosIds.length;
-            if (nuevosIds.length === 0) break;
+            todasLasPublicaciones = [...todasLasPublicaciones, ...publicacionesRango];
+          } catch (error) {
+            console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
           }
-
-          if (allItemIds.length === 0) continue; // Si no hay ítems, pasar a la siguiente cuenta
-
-          // Procesamos los IDs en batches de 20
-          const batchSize = 20;
-          for (let i = 0; i < allItemIds.length; i += batchSize) {
-            const batchIds = allItemIds.slice(i, i + batchSize).join(",");
-            const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
-            const itemsResponse = await fetch(itemsUrl);
-
-            if (!itemsResponse.ok) {
-              console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
-              continue;
-            }
-
-            const itemsData = await itemsResponse.json();
-
-            const validItems = itemsData
-              .filter((item) => item.code === 200)
-              .map((item) => ({
-                ...item.body, // Contiene id, title, price, thumbnail, status, etc.
-                userNickname: nickname,
-              }));
-
-            todasLasPublicaciones = [...todasLasPublicaciones, ...validItems];
-          }
-        } catch (error) {
-          console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
       }
-
       setPublicaciones(todasLasPublicaciones);
     };
 
     if (cuentas.length > 0) {
-      fetchPublicaciones();
+      fetchTodasPublicaciones();
     }
   }, [cuentas]);
 
-  // Opciones únicas para status y nickname
-  const uniqueStatus = Array.from(new Set(publicaciones.map((pub) => pub.status))).filter(Boolean);
-  const uniqueNicknames = Array.from(new Set(publicaciones.map((pub) => pub.userNickname))).filter(Boolean);
+  // 3. Filtrado de publicaciones según el texto ingresado y el filtro activo
+  const publicacionesFiltradas = useMemo(() => {
+    return publicaciones.filter((item) => {
+      const valor =
+        filterType === "id"
+          ? (item.id || "").toLowerCase()
+          : filterType === "status"
+          ? (item.status || "").toLowerCase()
+          : filterType === "nickname"
+          ? (item.userNickname || "").toLowerCase()
+          : "";
+      return valor.includes(busqueda.toLowerCase());
+    });
+  }, [publicaciones, busqueda, filterType]);
 
-  // 3. Filtrar publicaciones según el filtro por nombre (título) y el filtro activo
-  const publicacionesFiltradas = publicaciones.filter((item) => {
-    // Filtro por nombre (título)
-    const filtroNombre = item.title?.toLowerCase().includes(busquedaNombre.toLowerCase());
-
-    let filtroAdicional = true;
-    if (filterType === "id") {
-      filtroAdicional = item.id?.toLowerCase().includes(busqueda.toLowerCase());
-    } else if (filterType === "status") {
-      filtroAdicional = busqueda === "all" || item.status === busqueda;
-    } else if (filterType === "nickname") {
-      filtroAdicional = busqueda === "all" || item.userNickname === busqueda;
-    }
-    return filtroNombre && filtroAdicional;
-  });
-
-  // Reiniciamos la página actual cuando cambie la búsqueda o el filtro
+  // Reiniciar la página actual solo cuando cambie la búsqueda o el filtro
   useEffect(() => {
     setCurrentPage(1);
-  }, [busqueda, busquedaNombre, filterType]);
+  }, [busqueda, filterType]);
 
-  // Calcular la paginación
+  // Cálculos de paginación
+  const totalPaginas = Math.ceil(publicacionesFiltradas.length / publicacionesPorPagina);
   const indexUltimo = currentPage * publicacionesPorPagina;
   const indexPrimer = indexUltimo - publicacionesPorPagina;
   const publicacionesPaginadas = publicacionesFiltradas.slice(indexPrimer, indexUltimo);
-  const totalPaginas = Math.ceil(publicacionesFiltradas.length / publicacionesPorPagina);
+
+  const handleAnterior = () => {
+    if (currentPage > 1) setCurrentPage((prev) => prev - 1);
+  };
+
+  const handleSiguiente = () => {
+    if (currentPage < totalPaginas) setCurrentPage((prev) => prev + 1);
+  };
 
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
 
-      {/* Filtro adicional por nombre (título) */}
-      <div style={{ marginBottom: "10px" }}>
-        <input
-          type="text"
-          placeholder="Buscar por nombre (título)"
-          value={busquedaNombre}
-          onChange={(e) => setBusquedaNombre(e.target.value)}
-          style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
-        />
-      </div>
-
-      {/* Pestañas de filtro */}
+      {/* Filtros */}
       <div style={{ marginBottom: "10px", display: "flex", gap: "10px" }}>
         <button
-          onClick={() => {
-            setFilterType("id");
-            setBusqueda("");
-          }}
+          onClick={() => setFilterType("id")}
           style={{
             backgroundColor: filterType === "id" ? "#ddd" : "#fff",
             padding: "8px 12px",
@@ -160,10 +178,7 @@ const Publicaciones = () => {
           ID de Publicación
         </button>
         <button
-          onClick={() => {
-            setFilterType("status");
-            setBusqueda("all");
-          }}
+          onClick={() => setFilterType("status")}
           style={{
             backgroundColor: filterType === "status" ? "#ddd" : "#fff",
             padding: "8px 12px",
@@ -174,10 +189,7 @@ const Publicaciones = () => {
           Estado de Publicación
         </button>
         <button
-          onClick={() => {
-            setFilterType("nickname");
-            setBusqueda("all");
-          }}
+          onClick={() => setFilterType("nickname")}
           style={{
             backgroundColor: filterType === "nickname" ? "#ddd" : "#fff",
             padding: "8px 12px",
@@ -189,43 +201,14 @@ const Publicaciones = () => {
         </button>
       </div>
 
-      {/* Filtro según el tipo seleccionado */}
       <div style={{ marginBottom: "10px" }}>
-        {filterType === "id" ? (
-          <input
-            type="text"
-            placeholder="Buscar por ID de publicación"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
-          />
-        ) : filterType === "status" ? (
-          <select
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
-          >
-            <option value="all">Todos</option>
-            {uniqueStatus.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        ) : filterType === "nickname" ? (
-          <select
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
-          >
-            <option value="all">Todas</option>
-            {uniqueNicknames.map((nick) => (
-              <option key={nick} value={nick}>
-                {nick}
-              </option>
-            ))}
-          </select>
-        ) : null}
+        <input
+          type="text"
+          placeholder={`Buscar por ${filterType}`}
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
+        />
       </div>
 
       {publicacionesFiltradas.length === 0 ? (
@@ -270,22 +253,41 @@ const Publicaciones = () => {
             ))}
           </ul>
 
-          {/* Paginación */}
-          <div style={{ display: "flex", justifyContent: "center", marginTop: "20px", gap: "5px" }}>
-            {Array.from({ length: totalPaginas }, (_, index) => (
-              <button
-                key={index + 1}
-                onClick={() => setCurrentPage(index + 1)}
-                style={{
-                  padding: "8px 12px",
-                  border: "1px solid #ccc",
-                  backgroundColor: currentPage === index + 1 ? "#ddd" : "#fff",
-                  cursor: "pointer",
-                }}
-              >
-                {index + 1}
-              </button>
-            ))}
+          {/* Paginación: Botones "Anterior" y "Siguiente" */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              marginTop: "20px",
+              gap: "10px",
+            }}
+          >
+            <button
+              onClick={handleAnterior}
+              disabled={currentPage === 1}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #ccc",
+                cursor: currentPage === 1 ? "not-allowed" : "pointer",
+              }}
+            >
+              Anterior
+            </button>
+            <span>
+              Página {currentPage} de {totalPaginas}
+            </span>
+            <button
+              onClick={handleSiguiente}
+              disabled={currentPage === totalPaginas}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #ccc",
+                cursor: currentPage === totalPaginas ? "not-allowed" : "pointer",
+              }}
+            >
+              Siguiente
+            </button>
           </div>
         </>
       )}
