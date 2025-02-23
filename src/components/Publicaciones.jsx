@@ -3,15 +3,34 @@ import React, { useState, useEffect, useMemo } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
-// Función auxiliar para obtener publicaciones en un rango de fechas para una cuenta
+// Función que genera rangos semanales (timestamps Unix) desde startDate hasta endDate
+const generateWeeklyRanges = (startDate, endDate) => {
+  const ranges = [];
+  let current = new Date(startDate);
+  const end = new Date(endDate);
+
+  while (current < end) {
+    const desde = Math.floor(current.getTime() / 1000);
+    const nextWeek = new Date(current);
+    nextWeek.setDate(current.getDate() + 7);
+    // El rango se define hasta el final de la semana (un segundo antes de la siguiente semana)
+    const hasta = Math.floor(nextWeek.getTime() / 1000) - 1;
+    ranges.push({ desde, hasta });
+    current = nextWeek;
+  }
+
+  return ranges;
+};
+
+// Función auxiliar para obtener publicaciones en un rango semanal para una cuenta
 const fetchPublicacionesEnRango = async (userId, accessToken, nickname, desde, hasta) => {
   let publicacionesRango = [];
   let offset = 0;
   let total = Infinity;
   const MAX_OFFSET = 1000; // límite impuesto por la API para cada consulta
 
+  // Consulta paginada en el rango semanal
   while (offset < total && offset < MAX_OFFSET) {
-    // Ajusta los parámetros de fecha según la documentación del endpoint
     const url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}&date_created_from=${desde}&date_created_to=${hasta}`;
     const response = await fetch(url);
     if (!response.ok) {
@@ -69,26 +88,23 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Para cada cuenta, obtener los detalles de sus publicaciones dividiéndolas en rangos de fechas
+  // 2. Para cada cuenta, obtener los detalles de sus publicaciones por rangos semanales
   useEffect(() => {
     const fetchTodasPublicaciones = async () => {
       let todasLasPublicaciones = [];
 
-      // Define los rangos de fecha. Por ejemplo, si tus publicaciones abarcan de enero de 2020 a diciembre de 2022,
-      // puedes dividir en trimestres o años. Aquí se muestra un ejemplo simple con rangos anuales.
-      const rangosFechas = [
-        { desde: 1577836800, hasta: 1609459199 }, // 2020 (timestamps Unix)
-        { desde: 1609459200, hasta: 1640995199 }, // 2021
-        { desde: 1640995200, hasta: 1672531199 }  // 2022
-      ];
-      
+      // Define la fecha de inicio y la fecha final (fecha actual)
+      const fechaInicio = "2020-01-01"; // ajustar según tus necesidades
+      const fechaFin = new Date().toISOString().split("T")[0]; // fecha actual en formato YYYY-MM-DD
+      const rangosSemanales = generateWeeklyRanges(fechaInicio, fechaFin);
+
       for (const cuenta of cuentas) {
         const accessToken = cuenta.token?.access_token;
         const userId = cuenta.profile?.id;
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
         if (!accessToken || !userId) continue;
 
-        for (const rango of rangosFechas) {
+        for (const rango of rangosSemanales) {
           try {
             const publicacionesRango = await fetchPublicacionesEnRango(
               userId,
