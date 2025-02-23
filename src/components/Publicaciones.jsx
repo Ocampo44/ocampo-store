@@ -42,41 +42,44 @@ const styles = {
     fontSize: "16px",
     backgroundColor: "#fff",
   },
-  cardList: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-    gap: "20px",
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: "8px",
-    overflow: "hidden",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-    display: "flex",
-    flexDirection: "column",
-    transition: "transform 0.2s",
-  },
-  cardHover: {
-    transform: "translateY(-5px)",
-  },
-  cardImage: {
+  table: {
     width: "100%",
-    height: "180px",
+    borderCollapse: "collapse",
+  },
+  th: {
+    textAlign: "left",
+    padding: "12px",
+    backgroundColor: "#1976d2",
+    color: "#fff",
+    fontSize: "16px",
+  },
+  td: {
+    padding: "12px",
+    borderBottom: "1px solid #ddd",
+    verticalAlign: "middle",
+  },
+  img: {
+    width: "80px",
+    height: "80px",
     objectFit: "cover",
+    borderRadius: "4px",
   },
-  cardBody: {
-    padding: "15px",
-  },
-  cardTitle: {
-    fontSize: "18px",
-    fontWeight: "600",
-    marginBottom: "10px",
-    color: "#1976d2",
-  },
-  cardText: {
-    fontSize: "14px",
-    marginBottom: "6px",
-    lineHeight: "1.4",
+  statusBadge: (status) => {
+    let backgroundColor = "#999";
+    // Ajusta los colores según el estado. Puedes personalizar o agregar nuevos estados.
+    if (status === "active") backgroundColor = "#4caf50"; // verde
+    else if (status === "paused") backgroundColor = "#ff9800"; // naranja
+    else if (status === "inactive") backgroundColor = "#f44336"; // rojo
+    return {
+      padding: "5px 10px",
+      borderRadius: "12px",
+      backgroundColor,
+      color: "#fff",
+      fontSize: "12px",
+      textTransform: "capitalize",
+      textAlign: "center",
+      minWidth: "80px",
+    };
   },
   pagination: {
     display: "flex",
@@ -309,32 +312,36 @@ const Publicaciones = () => {
       {publicacionesPaginadas.length === 0 ? (
         <p style={{ textAlign: "center" }}>No se encontraron publicaciones.</p>
       ) : (
-        <div style={styles.cardList}>
-          {publicacionesPaginadas.map((pub) => (
-            <div key={pub.id} style={styles.card}>
-              <img
-                src={pub.thumbnail}
-                alt={pub.title}
-                style={styles.cardImage}
-              />
-              <div style={styles.cardBody}>
-                <h3 style={styles.cardTitle}>{pub.title}</h3>
-                <p style={styles.cardText}>
-                  <strong>Precio:</strong> {pub.price} {pub.currency_id}
-                </p>
-                <p style={styles.cardText}>
-                  <strong>Cuenta:</strong> {pub.userNickname}
-                </p>
-                <p style={styles.cardText}>
-                  <strong>ID:</strong> {pub.id}
-                </p>
-                <p style={styles.cardText}>
-                  <strong>Estado:</strong> {pub.status}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Imagen</th>
+              <th style={styles.th}>Título</th>
+              <th style={styles.th}>Precio</th>
+              <th style={styles.th}>Cuenta</th>
+              <th style={styles.th}>ID</th>
+              <th style={styles.th}>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {publicacionesPaginadas.map((pub) => (
+              <tr key={pub.id}>
+                <td style={styles.td}>
+                  <img src={pub.thumbnail} alt={pub.title} style={styles.img} />
+                </td>
+                <td style={styles.td}>{pub.title}</td>
+                <td style={styles.td}>
+                  {pub.price} {pub.currency_id}
+                </td>
+                <td style={styles.td}>{pub.userNickname}</td>
+                <td style={styles.td}>{pub.id}</td>
+                <td style={styles.td}>
+                  <span style={styles.statusBadge(pub.status)}>{pub.status}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
 
       {totalPaginas > 1 && (
