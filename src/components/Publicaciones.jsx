@@ -41,38 +41,47 @@ const Publicaciones = () => {
 
         try {
           const estados = ["active", "paused", "closed"];
+          const rangosPrecio = ["0-100", "100-200", "200-300", "300-400", "400-500",
+                                "500-750", "750-1000", "1000-1500", "1500-2000", 
+                                "2000-5000", "5000-10000", "10000-"];
+          const fechas = ["30d", "60d", "90d", "180d", "365d"]; // 🔹 Nueva separación por fecha
+
           let allItemIds = [];
 
           for (const estado of estados) {
-            let offset = 0;
-            let totalItems = Infinity;
-            let estadoItems = 0; // Contador para depurar
+            for (const precio of rangosPrecio) {
+              for (const fecha of fechas) { // 🔥 Nueva separación por fecha
+                let offset = 0;
+                let totalItems = Infinity;
+                let estadoItems = 0; // Contador para verificar si realmente está trayendo más
 
-            console.log(`🔍 Buscando publicaciones en estado: ${estado} para ${nickname}...`);
+                console.log(`🔍 Buscando publicaciones en estado: ${estado}, rango de precio: ${precio}, fecha: ${fecha} para ${nickname}...`);
 
-            while (offset < totalItems) {
-              const searchUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=${estado}&offset=${offset}&limit=50`;
+                while (offset < totalItems) {
+                  const searchUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=${estado}&price=${precio}&date_created=${fecha}&offset=${offset}&limit=50`;
 
-              console.log(`➡️ Fetching: ${searchUrl}`);
-              const searchResponse = await fetch(searchUrl);
-              if (!searchResponse.ok) {
-                console.error(`⚠️ Error al obtener IDs (${estado}):`, searchResponse.status);
-                break;
+                  console.log(`➡️ Fetching: ${searchUrl}`);
+                  const searchResponse = await fetch(searchUrl);
+                  if (!searchResponse.ok) {
+                    console.error(`⚠️ Error al obtener IDs (${estado}, ${precio}, ${fecha}):`, searchResponse.status);
+                    break;
+                  }
+
+                  const searchData = await searchResponse.json();
+                  const itemIds = searchData.results || [];
+                  totalItems = searchData.paging?.total || itemIds.length;
+
+                  console.log(`📌 Total Items en ML (${estado}, ${precio}, ${fecha}): ${totalItems}, Offset Actual: ${offset}, IDs obtenidos: ${itemIds.length}`);
+
+                  if (itemIds.length === 0) break;
+                  offset += searchData.paging?.limit || 50;
+                  allItemIds.push(...itemIds);
+                  estadoItems += itemIds.length;
+                }
+
+                console.log(`✅ Total de publicaciones en estado ${estado}, precio ${precio}, fecha ${fecha} para ${nickname}: ${estadoItems}`);
               }
-
-              const searchData = await searchResponse.json();
-              const itemIds = searchData.results || [];
-              totalItems = searchData.paging?.total || itemIds.length;
-
-              console.log(`📌 Total Items en ML (${estado}): ${totalItems}, Offset Actual: ${offset}, IDs obtenidos: ${itemIds.length}`);
-
-              if (itemIds.length === 0) break;
-              offset += searchData.paging?.limit || 50;
-              allItemIds.push(...itemIds);
-              estadoItems += itemIds.length;
             }
-
-            console.log(`✅ Total de publicaciones en estado ${estado} para ${nickname}: ${estadoItems}`);
           }
 
           console.log(`🔹 Total IDs recopilados para ${nickname}: ${allItemIds.length}`);
@@ -127,29 +136,6 @@ const Publicaciones = () => {
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
-
-      {/* Filtros */}
-      <div style={{ marginBottom: "20px", display: "flex", flexWrap: "wrap", gap: "10px" }}>
-        <select value={filtroCuenta} onChange={(e) => setFiltroCuenta(e.target.value)} style={{ padding: "6px" }}>
-          <option value="">Todas las cuentas</option>
-          {cuentas.map((cuenta) => (
-            <option key={cuenta.id} value={cuenta.profile?.nickname}>
-              {cuenta.profile?.nickname || "Sin Nombre"}
-            </option>
-          ))}
-        </select>
-
-        <input type="text" placeholder="Buscar por título..." value={filtroTitulo} onChange={(e) => setFiltroTitulo(e.target.value)} style={{ padding: "8px", maxWidth: "200px" }}/>
-
-        <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} style={{ padding: "6px" }}>
-          <option value="">Todos los estados</option>
-          <option value="active">Activo</option>
-          <option value="paused">Pausado</option>
-          <option value="closed">Cerrado</option>
-        </select>
-
-        <input type="text" placeholder="Buscar por ID..." value={filtroID} onChange={(e) => setFiltroID(e.target.value)} style={{ padding: "8px", maxWidth: "200px" }}/>
-      </div>
 
       <p><strong>Total de publicaciones:</strong> {publicacionesArray.length}</p>
 
