@@ -19,9 +19,13 @@ const Ventas = () => {
       }));
       console.log("Cuentas obtenidas:", acc);
       setAccounts(acc);
+      // Si aún no hay cuenta seleccionada, se asigna la primera cuenta obtenida
+      if (!selectedAccount && acc.length > 0) {
+        setSelectedAccount(acc[0].id);
+      }
     });
     return () => unsub();
-  }, []);
+  }, [selectedAccount]);
 
   // Obtener las ventas de la cuenta seleccionada
   useEffect(() => {
@@ -58,7 +62,7 @@ const Ventas = () => {
           console.log("Total de ventas:", data.paging.total);
         }
         let results = data.results || [];
-        // Filtrado local por estado si se selecciona uno distinto de "all"
+        // Filtrado local por estado si se selecciona uno distinto a "all"
         if (statusFilter !== 'all') {
           results = results.filter(sale => sale.status === statusFilter);
         }
@@ -110,39 +114,37 @@ const Ventas = () => {
       </div>
       {loading ? (
         <p>Cargando ventas...</p>
-      ) : (
+      ) : sales.length > 0 ? (
         <div className="overflow-x-auto">
-          {sales.length > 0 ? (
-            <table className="min-w-full bg-white border">
-              <thead>
-                <tr>
-                  <th className="py-2 px-4 border-b">ID Pedido</th>
-                  <th className="py-2 px-4 border-b">Comprador</th>
-                  <th className="py-2 px-4 border-b">Monto Total</th>
-                  <th className="py-2 px-4 border-b">Estado</th>
-                  <th className="py-2 px-4 border-b">Fecha</th>
+          <table className="min-w-full bg-white border">
+            <thead>
+              <tr>
+                <th className="py-2 px-4 border-b">ID Pedido</th>
+                <th className="py-2 px-4 border-b">Comprador</th>
+                <th className="py-2 px-4 border-b">Monto Total</th>
+                <th className="py-2 px-4 border-b">Estado</th>
+                <th className="py-2 px-4 border-b">Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sales.map((sale) => (
+                <tr key={sale.id} className="text-center">
+                  <td className="py-2 px-4 border-b">{sale.id}</td>
+                  <td className="py-2 px-4 border-b">
+                    {sale.buyer ? sale.buyer.nickname : 'N/A'}
+                  </td>
+                  <td className="py-2 px-4 border-b">{sale.total_amount}</td>
+                  <td className="py-2 px-4 border-b">{sale.status}</td>
+                  <td className="py-2 px-4 border-b">
+                    {new Date(sale.date_created).toLocaleDateString()}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {sales.map((sale) => (
-                  <tr key={sale.id} className="text-center">
-                    <td className="py-2 px-4 border-b">{sale.id}</td>
-                    <td className="py-2 px-4 border-b">
-                      {sale.buyer ? sale.buyer.nickname : 'N/A'}
-                    </td>
-                    <td className="py-2 px-4 border-b">{sale.total_amount}</td>
-                    <td className="py-2 px-4 border-b">{sale.status}</td>
-                    <td className="py-2 px-4 border-b">
-                      {new Date(sale.date_created).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p>No se encontraron ventas.</p>
-          )}
+              ))}
+            </tbody>
+          </table>
         </div>
+      ) : (
+        <p>No se encontraron ventas.</p>
       )}
     </div>
   );
