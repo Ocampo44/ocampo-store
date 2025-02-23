@@ -14,8 +14,8 @@ const Publicaciones = () => {
   // Estados para filtros individuales
   const [filterName, setFilterName] = useState("");
   const [filterId, setFilterId] = useState("");
-  const [filterAccount, setFilterAccount] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterAccount, setFilterAccount] = useState("Todos");
+  const [filterStatus, setFilterStatus] = useState("Todos");
 
   // Estado para paginación en la UI
   const [currentPage, setCurrentPage] = useState(0);
@@ -89,7 +89,7 @@ const Publicaciones = () => {
     return allDetails;
   };
 
-  // 3. Actualización en segundo plano: Cada vez que se carga el componente, se consulta MercadoLibre y se actualiza Firestore
+  // 3. Actualización en segundo plano: cada vez que se carga el componente se consulta MercadoLibre y se actualiza Firestore
   useEffect(() => {
     const updatePublicacionesFromML = async () => {
       for (const cuenta of cuentas) {
@@ -103,7 +103,7 @@ const Publicaciones = () => {
           if (allItemIds.length === 0) continue;
           // Obtener los detalles de los ítems en lotes
           const detalles = await fetchItemDetailsInBatches(allItemIds, accessToken, nickname, userId);
-          // Para cada publicación, actualizar (o crear) el documento en Firestore
+          // Actualizar (o crear) cada documento en Firestore
           for (const pub of detalles) {
             await setDoc(doc(db, "publicaciones", pub.id), pub, { merge: true });
           }
@@ -112,13 +112,23 @@ const Publicaciones = () => {
         }
       }
     };
+
     if (cuentas.length > 0) {
       // Ejecuta la actualización en segundo plano sin interrumpir la experiencia del usuario
       updatePublicacionesFromML();
     }
   }, [cuentas]);
 
-  // 4. Filtrado: Se filtran las publicaciones según los filtros ingresados
+  // 4. Calcular las opciones disponibles para los desplegables de Cuenta y Estado
+  const availableAccounts = Array.from(
+    new Set(publicaciones.map((item) => item.userNickname).filter(Boolean))
+  ).sort();
+
+  const availableStatuses = Array.from(
+    new Set(publicaciones.map((item) => item.status).filter(Boolean))
+  ).sort();
+
+  // 5. Filtrado: se filtran las publicaciones según el buscador y los filtros desplegables
   const publicacionesFiltradas = publicaciones.filter((item) => {
     const title = item.title?.toLowerCase() || "";
     const id = (item.id || "").toLowerCase();
@@ -128,13 +138,13 @@ const Publicaciones = () => {
     return (
       title.includes(filterName.toLowerCase()) &&
       id.includes(filterId.toLowerCase()) &&
-      cuenta.includes(filterAccount.toLowerCase()) &&
-      status.includes(filterStatus.toLowerCase()) &&
+      (filterAccount === "Todos" || cuenta === filterAccount.toLowerCase()) &&
+      (filterStatus === "Todos" || status === filterStatus.toLowerCase()) &&
       title.includes(busqueda.toLowerCase())
     );
   });
 
-  // 5. Paginación en la UI
+  // 6. Paginación en la UI
   const totalPages = Math.ceil(publicacionesFiltradas.length / pageSize);
   const startIndex = currentPage * pageSize;
   const endIndex = startIndex + pageSize;
@@ -198,29 +208,39 @@ const Publicaciones = () => {
           </div>
           <div>
             <label>Cuenta:</label>
-            <input
-              type="text"
-              placeholder="Filtrar por cuenta"
+            <select
               value={filterAccount}
               onChange={(e) => {
                 setFilterAccount(e.target.value);
                 setCurrentPage(0);
               }}
               style={{ padding: "6px" }}
-            />
+            >
+              <option value="Todos">Todos</option>
+              {availableAccounts.map((acc) => (
+                <option key={acc} value={acc}>
+                  {acc}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label>Estado:</label>
-            <input
-              type="text"
-              placeholder="Filtrar por estado"
+            <select
               value={filterStatus}
               onChange={(e) => {
                 setFilterStatus(e.target.value);
                 setCurrentPage(0);
               }}
               style={{ padding: "6px" }}
-            />
+            >
+              <option value="Todos">Todos</option>
+              {availableStatuses.map((st) => (
+                <option key={st} value={st}>
+                  {st}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
