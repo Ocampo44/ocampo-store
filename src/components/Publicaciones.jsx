@@ -3,6 +3,15 @@ import React, { useState, useEffect } from "react";
 import { collection, onSnapshot, doc, writeBatch } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
+// Función auxiliar para dividir un array en trozos
+const chunkArray = (array, chunkSize) => {
+  const results = [];
+  for (let i = 0; i < array.length; i += chunkSize) {
+    results.push(array.slice(i, i + chunkSize));
+  }
+  return results;
+};
+
 const Publicaciones = () => {
   // Estados para cuentas y publicaciones cacheadas
   const [cuentas, setCuentas] = useState([]);
@@ -92,7 +101,7 @@ const Publicaciones = () => {
     return allDetails;
   };
 
-  // 3. Actualización en segundo plano: Consulta MercadoLibre y guarda en Firestore usando batch writes
+  // 3. Actualización en segundo plano: Consulta MercadoLibre y guarda en Firestore usando batch writes divididos
   useEffect(() => {
     const updatePublicacionesFromML = async () => {
       for (const cuenta of cuentas) {
@@ -109,17 +118,21 @@ const Publicaciones = () => {
           console.log(`Cuenta ${cuenta.id} - Detalles obtenidos:`, detalles);
           if (detalles.length === 0) continue;
           
-          const batch = writeBatch(db);
-          detalles.forEach((pub) => {
-            if (!pub.id) {
-              console.error("Elemento sin ID:", pub);
-              return;
-            }
-            const pubRef = doc(db, "publicaciones", pub.id);
-            batch.set(pubRef, pub, { merge: true });
-          });
-          await batch.commit();
-          console.log(`Cuenta ${cuenta.id} - Batch commit exitoso.`);
+          // Dividir los detalles en batches más pequeños (por ejemplo, de 50 documentos)
+          const chunks = chunkArray(detalles, 50);
+          for (const [index, chunk] of chunks.entries()) {
+            const batch = writeBatch(db);
+            chunk.forEach((pub) => {
+              if (!pub.id) {
+                console.error("Elemento sin ID:", pub);
+                return;
+              }
+              const pubRef = doc(db, "publicaciones", pub.id);
+              batch.set(pubRef, pub, { merge: true });
+            });
+            await batch.commit();
+            console.log(`Cuenta ${cuenta.id} - Batch ${index + 1} commit exitoso.`);
+          }
         } catch (error) {
           console.error("Error actualizando publicaciones para la cuenta:", cuenta.id, error);
         }
