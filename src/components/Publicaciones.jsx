@@ -1,6 +1,6 @@
 // src/components/Publicaciones.jsx
 import React, { useState, useEffect } from "react";
-import { collection, onSnapshot, setDoc, doc, writeBatch } from "firebase/firestore";
+import { collection, onSnapshot, doc, writeBatch } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
 const Publicaciones = () => {
@@ -8,53 +8,55 @@ const Publicaciones = () => {
   const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState([]);
   
-  // Estado para el buscador general (por nombre)
+  // Estado para el buscador general y filtros
   const [busqueda, setBusqueda] = useState("");
-  
-  // Estados para filtros individuales
   const [filterName, setFilterName] = useState("");
   const [filterId, setFilterId] = useState("");
   const [filterAccount, setFilterAccount] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
 
-  // Estado para paginación en la UI
+  // Estado para paginación
   const [currentPage, setCurrentPage] = useState(0);
-  const pageSize = 20; // Cantidad de publicaciones por página
+  const pageSize = 20;
 
-  // 1. Suscribirse a la colección "mercadolibreUsers" para obtener las cuentas conectadas
+  // 1. Suscripción a la colección "mercadolibreUsers"
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const cuentasTemp = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
+      console.log("Cuentas obtenidas:", cuentasTemp);
       setCuentas(cuentasTemp);
     });
     return () => unsub();
   }, []);
 
-  // 2. Suscribirse a la colección "publicaciones" (cacheadas)
+  // 2. Suscripción a la colección "publicaciones"
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "publicaciones"), (snapshot) => {
       const pubs = snapshot.docs.map((doc) => doc.data());
+      console.log("Publicaciones actuales:", pubs);
       setPublicaciones(pubs);
     });
     return () => unsub();
   }, []);
 
-  // Función para obtener todas las IDs de publicaciones (utilizando un límite máximo de 100)
+  // Función para obtener todas las IDs de publicaciones (limit máximo 100)
   const fetchAllItemIDs = async (userId, accessToken) => {
     let offset = 0;
-    const limit = 100; // Se establece un límite máximo de 100 items por solicitud
+    const limit = 100; // Límite máximo permitido
     let allItemIds = [];
     while (true) {
       const url = `https://api.mercadolibre.com/users/${userId}/items/search?limit=${limit}&offset=${offset}&access_token=${accessToken}`;
+      console.log("Llamada a URL (IDs):", url);
       const resp = await fetch(url);
       if (!resp.ok) {
         console.error("Error al obtener IDs de publicaciones:", resp.status);
         break;
       }
       const data = await resp.json();
+      console.log("Respuesta de IDs:", data);
       const itemIds = data.results || [];
       allItemIds = [...allItemIds, ...itemIds];
       offset += limit;
@@ -63,24 +65,25 @@ const Publicaciones = () => {
     return allItemIds;
   };
 
-  // Función para obtener el detalle de los ítems en lotes de 20
+  // Función para obtener detalles de ítems en lotes (de 20 en 20)
   const fetchItemDetailsInBatches = async (itemIds, accessToken, nickname, userId) => {
     const batchSize = 20;
     let allDetails = [];
     for (let i = 0; i < itemIds.length; i += batchSize) {
       const batchIds = itemIds.slice(i, i + batchSize).join(",");
       const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
+      console.log("Llamada a URL (detalles):", itemsUrl);
       const itemsResponse = await fetch(itemsUrl);
       if (!itemsResponse.ok) {
         console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
         continue;
       }
-      // La respuesta es un array: [{ code, body: { ...itemData } }, ...]
       const itemsData = await itemsResponse.json();
+      console.log("Detalles recibidos:", itemsData);
       const validItems = itemsData
         .filter((item) => item.code === 200)
         .map((item) => ({
-          ...item.body,             // Incluye id, title, price, status, thumbnail, etc.
+          ...item.body,             // id, title, price, status, thumbnail, etc.
           userNickname: nickname,   // Agrega el nickname de la cuenta
           accountId: userId,        // Guarda también el ID de la cuenta
         }));
@@ -89,7 +92,7 @@ const Publicaciones = () => {
     return allDetails;
   };
 
-  // 3. Actualización en segundo plano: Consulta MercadoLibre y actualiza Firestore
+  // 3. Actualización en segundo plano: Consulta MercadoLibre y guarda en Firestore usando batch writes
   useEffect(() => {
     const updatePublicacionesFromML = async () => {
       for (const cuenta of cuentas) {
@@ -98,37 +101,41 @@ const Publicaciones = () => {
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
         if (!accessToken || !userId) continue;
         try {
-          // Obtener todas las IDs de publicaciones (según lo permitido por la API)
           const allItemIds = await fetchAllItemIDs(userId, accessToken);
+          console.log(`Cuenta ${cuenta.id} - IDs obtenidos:`, allItemIds);
           if (allItemIds.length === 0) continue;
-          // Obtener los detalles de los ítems en lotes
+          
           const detalles = await fetchItemDetailsInBatches(allItemIds, accessToken, nickname, userId);
+          console.log(`Cuenta ${cuenta.id} - Detalles obtenidos:`, detalles);
           if (detalles.length === 0) continue;
-          // Actualizar (o crear) los documentos en Firestore utilizando batch writes para minimizar las operaciones individuales
+          
           const batch = writeBatch(db);
           detalles.forEach((pub) => {
+            if (!pub.id) {
+              console.error("Elemento sin ID:", pub);
+              return;
+            }
             const pubRef = doc(db, "publicaciones", pub.id);
             batch.set(pubRef, pub, { merge: true });
           });
           await batch.commit();
+          console.log(`Cuenta ${cuenta.id} - Batch commit exitoso.`);
         } catch (error) {
           console.error("Error actualizando publicaciones para la cuenta:", cuenta.id, error);
         }
       }
     };
     if (cuentas.length > 0) {
-      // Ejecuta la actualización en segundo plano sin interrumpir la experiencia del usuario
       updatePublicacionesFromML();
     }
   }, [cuentas]);
 
-  // 4. Filtrado: Se filtran las publicaciones según los filtros ingresados
+  // 4. Filtrado de publicaciones
   const publicacionesFiltradas = publicaciones.filter((item) => {
     const title = item.title?.toLowerCase() || "";
     const id = (item.id || "").toLowerCase();
     const cuenta = item.userNickname?.toLowerCase() || "";
     const status = item.status?.toLowerCase() || "";
-
     return (
       title.includes(filterName.toLowerCase()) &&
       id.includes(filterId.toLowerCase()) &&
@@ -138,7 +145,7 @@ const Publicaciones = () => {
     );
   });
 
-  // 5. Paginación en la UI
+  // 5. Paginación
   const totalPages = Math.ceil(publicacionesFiltradas.length / pageSize);
   const startIndex = currentPage * pageSize;
   const endIndex = startIndex + pageSize;
@@ -155,7 +162,7 @@ const Publicaciones = () => {
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
-
+      
       {/* Buscador general */}
       <div style={{ marginBottom: "10px" }}>
         <input
@@ -169,7 +176,7 @@ const Publicaciones = () => {
           style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
         />
       </div>
-
+      
       {/* Filtros adicionales */}
       <div style={{ marginBottom: "20px" }}>
         <h3>Filtros</h3>
@@ -229,7 +236,7 @@ const Publicaciones = () => {
         </div>
       </div>
 
-      {/* Lista de publicaciones con paginación */}
+      {/* Lista de publicaciones */}
       {publicacionesEnPagina.length === 0 ? (
         <p>No se encontraron publicaciones.</p>
       ) : (
@@ -273,24 +280,14 @@ const Publicaciones = () => {
       )}
 
       {/* Controles de paginación */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          gap: "10px",
-          marginTop: "20px",
-        }}
-      >
+      <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "20px" }}>
         <button onClick={handlePrevPage} disabled={currentPage === 0}>
           Anterior
         </button>
         <span>
           Página {currentPage + 1} de {totalPages}
         </span>
-        <button
-          onClick={handleNextPage}
-          disabled={currentPage === totalPages - 1 || totalPages === 0}
-        >
+        <button onClick={handleNextPage} disabled={currentPage === totalPages - 1 || totalPages === 0}>
           Siguiente
         </button>
       </div>
