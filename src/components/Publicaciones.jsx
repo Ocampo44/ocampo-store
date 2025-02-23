@@ -24,7 +24,7 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Obtener publicaciones de cada cuenta
+  // 2. Obtener publicaciones de cada cuenta, incluyendo paginación en la API
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let todasLasPublicaciones = [];
@@ -37,20 +37,37 @@ const Publicaciones = () => {
         if (!accessToken || !userId) continue;
 
         try {
-          // Obtener IDs de publicaciones
-          const searchResponse = await fetch(
-            `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}`
-          );
-          if (!searchResponse.ok) {
-            console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
-            continue;
+          // Recuperar todos los IDs de publicaciones usando paginación en la API
+          let itemIds = [];
+          let offset = 0;
+          let totalItems = Infinity; // valor inicial alto
+          while (offset < totalItems) {
+            const searchUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&offset=${offset}`;
+            const searchResponse = await fetch(searchUrl);
+
+            if (!searchResponse.ok) {
+              console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
+              break;
+            }
+
+            const searchData = await searchResponse.json();
+            if (searchData.results) {
+              itemIds = [...itemIds, ...searchData.results];
+            }
+
+            // Actualizar totalItems y offset
+            if (searchData.paging) {
+              totalItems = searchData.paging.total;
+              offset += searchData.paging.limit;
+            } else {
+              break;
+            }
           }
 
-          const searchData = await searchResponse.json();
-          const itemIds = searchData.results || [];
+          // Si no hay ítems, pasar a la siguiente cuenta
           if (itemIds.length === 0) continue;
 
-          // Procesar en lotes de 20
+          // Procesar en lotes de 20 para obtener detalles de cada publicación
           const batchSize = 20;
           for (let i = 0; i < itemIds.length; i += batchSize) {
             const batchIds = itemIds.slice(i, i + batchSize).join(",");
@@ -62,7 +79,9 @@ const Publicaciones = () => {
               continue;
             }
 
+            // itemsResponse.json() retorna un array: [{ code, body: { ...itemData }}, ...]
             const itemsData = await itemsResponse.json();
+
             const validItems = itemsData
               .filter((item) => item.code === 200)
               .map((item) => ({
@@ -110,8 +129,9 @@ const Publicaciones = () => {
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
       {/* Total de publicaciones */}
-      <p><strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}</p>
-      
+      <p>
+        <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
+      </p>
       {/* Filtros */}
       <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
         <input
@@ -139,7 +159,6 @@ const Publicaciones = () => {
           ))}
         </select>
       </div>
-
       {/* Listado de publicaciones */}
       {publicacionesPaginadas.length === 0 ? (
         <p>No se encontraron publicaciones.</p>
@@ -182,7 +201,6 @@ const Publicaciones = () => {
           ))}
         </ul>
       )}
-
       {/* Paginación */}
       {totalPaginas > 1 && (
         <div style={{ display: "flex", gap: "5px", marginTop: "20px", flexWrap: "wrap" }}>
