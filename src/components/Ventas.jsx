@@ -9,7 +9,7 @@ const Ventas = () => {
   const [selectedAccount, setSelectedAccount] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Escucha en tiempo real las cuentas de MercadoLibre desde Firestore (se ejecuta solo una vez)
+  // Suscripción a Firestore para obtener las cuentas de MercadoLibre (se ejecuta solo una vez)
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const acc = snapshot.docs.map(doc => ({
@@ -18,15 +18,14 @@ const Ventas = () => {
       }));
       console.log("Cuentas obtenidas:", acc);
       setAccounts(acc);
-      // Asigna automáticamente la primera cuenta si no hay ninguna seleccionada
       if (!selectedAccount && acc.length > 0) {
         setSelectedAccount(acc[0].id);
       }
     });
     return () => unsub();
-  }, []); // <-- Dependencias vacías para que se ejecute solo al montar
+  }, []);
 
-  // Obtener las ventas de la cuenta seleccionada
+  // Obtener las ventas de la cuenta seleccionada a través del servidor proxy
   useEffect(() => {
     if (!selectedAccount) {
       console.log("No se ha seleccionado ninguna cuenta.");
@@ -43,25 +42,25 @@ const Ventas = () => {
     const fetchSales = async () => {
       setLoading(true);
       try {
-        const url = `https://api.mercadolibre.com/orders/search?seller=${selectedAccount}&offset=0&limit=50`;
-        console.log("Llamando a la API:", url);
+        // Llamada al proxy en lugar de la API directa
+        const url = `/api/orders?seller=${selectedAccount}&offset=0&limit=50`;
+        console.log("Llamando al proxy:", url);
         const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${account.token.access_token}`
           }
         });
         if (!response.ok) {
-          console.error("Error en la respuesta de la API:", response.status);
+          console.error("Error en la respuesta del proxy:", response.status);
           setLoading(false);
           return;
         }
         const data = await response.json();
-        console.log("Respuesta de la API:", data);
+        console.log("Respuesta del proxy:", data);
         let results = data.results || [];
         if (statusFilter !== 'all') {
           results = results.filter(sale => sale.status === statusFilter);
         }
-        console.log("Ventas obtenidas:", results);
         setSales(results);
       } catch (error) {
         console.error("Error al obtener ventas:", error);
@@ -103,7 +102,6 @@ const Ventas = () => {
             <option value="paid">Pagada</option>
             <option value="refunded">Reembolsada</option>
             <option value="approved">Aprobada</option>
-            {/* Agrega más opciones según los estados disponibles */}
           </select>
         </div>
       </div>
