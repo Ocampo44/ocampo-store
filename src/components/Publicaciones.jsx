@@ -5,13 +5,6 @@ import { db } from "../firebaseConfig";
 const Publicaciones = () => {
   const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState(new Map());
-
-  // Filtros
-  const [filtroCuenta, setFiltroCuenta] = useState(""); 
-  const [filtroTitulo, setFiltroTitulo] = useState(""); 
-  const [filtroEstado, setFiltroEstado] = useState(""); 
-  const [filtroID, setFiltroID] = useState(""); 
-
   const [cargando, setCargando] = useState(false);
 
   useEffect(() => {
@@ -41,52 +34,81 @@ const Publicaciones = () => {
 
         try {
           const estados = ["active", "paused", "closed"];
-          const rangosPrecio = ["0-100", "100-200", "200-300", "300-400", "400-500",
-                                "500-750", "750-1000", "1000-1500", "1500-2000", 
-                                "2000-5000", "5000-10000", "10000-"];
-          const fechas = ["30d", "60d", "90d", "180d", "365d"]; // 🔹 Nueva separación por fecha
+          const tiposPublicacion = ["gold_pro", "gold_special", "silver"];
+          const rangosPrecio = ["0-100", "100-200", "200-500", "500-1000", "1000-5000", "5000-10000", "10000-"];
+          const fechas = ["30d", "60d", "90d", "180d", "365d"];
+
+          let allCategories = new Set();
+
+          console.log(`🔍 Buscando categorías de publicaciones para ${nickname}...`);
+
+          for (const estado of estados) {
+            let offset = 0;
+            let totalItems = 1000;
+
+            while (offset < totalItems) {
+              const categoryUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=${estado}&offset=${offset}&limit=50`;
+
+              const categoryResponse = await fetch(categoryUrl);
+              if (!categoryResponse.ok) break;
+
+              const categoryData = await categoryResponse.json();
+              const itemIds = categoryData.results || [];
+              totalItems = categoryData.paging?.total || itemIds.length;
+
+              if (itemIds.length === 0) break;
+              offset += categoryData.paging?.limit || 50;
+
+              for (const itemId of itemIds) {
+                const itemUrl = `https://api.mercadolibre.com/items/${itemId}?access_token=${accessToken}`;
+                const itemResponse = await fetch(itemUrl);
+                if (!itemResponse.ok) continue;
+
+                const itemData = await itemResponse.json();
+                if (itemData.category_id) {
+                  allCategories.add(itemData.category_id);
+                }
+              }
+            }
+          }
+
+          console.log(`📂 Categorías identificadas para ${nickname}:`, [...allCategories]);
 
           let allItemIds = [];
 
           for (const estado of estados) {
-            for (const precio of rangosPrecio) {
-              for (const fecha of fechas) { // 🔥 Nueva separación por fecha
-                let offset = 0;
-                let totalItems = Infinity;
-                let estadoItems = 0; // Contador para verificar si realmente está trayendo más
+            for (const categoria of allCategories) {
+              for (const tipoPublicacion of tiposPublicacion) {
+                for (const precio of rangosPrecio) {
+                  for (const fecha of fechas) {
+                    let offset = 0;
+                    let totalItems = Infinity;
 
-                console.log(`🔍 Buscando publicaciones en estado: ${estado}, rango de precio: ${precio}, fecha: ${fecha} para ${nickname}...`);
+                    console.log(`🔍 Buscando publicaciones en categoría ${categoria}, tipo ${tipoPublicacion}, precio ${precio}, fecha ${fecha} (${estado}) para ${nickname}...`);
 
-                while (offset < totalItems) {
-                  const searchUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=${estado}&price=${precio}&date_created=${fecha}&offset=${offset}&limit=50`;
+                    while (offset < totalItems) {
+                      const searchUrl = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&status=${estado}&category=${categoria}&listing_type=${tipoPublicacion}&price=${precio}&date_created=${fecha}&offset=${offset}&limit=50`;
 
-                  console.log(`➡️ Fetching: ${searchUrl}`);
-                  const searchResponse = await fetch(searchUrl);
-                  if (!searchResponse.ok) {
-                    console.error(`⚠️ Error al obtener IDs (${estado}, ${precio}, ${fecha}):`, searchResponse.status);
-                    break;
+                      console.log(`➡️ Fetching: ${searchUrl}`);
+                      const searchResponse = await fetch(searchUrl);
+                      if (!searchResponse.ok) break;
+
+                      const searchData = await searchResponse.json();
+                      const itemIds = searchData.results || [];
+                      totalItems = searchData.paging?.total || itemIds.length;
+
+                      if (itemIds.length === 0) break;
+                      offset += searchData.paging?.limit || 50;
+                      allItemIds.push(...itemIds);
+                    }
                   }
-
-                  const searchData = await searchResponse.json();
-                  const itemIds = searchData.results || [];
-                  totalItems = searchData.paging?.total || itemIds.length;
-
-                  console.log(`📌 Total Items en ML (${estado}, ${precio}, ${fecha}): ${totalItems}, Offset Actual: ${offset}, IDs obtenidos: ${itemIds.length}`);
-
-                  if (itemIds.length === 0) break;
-                  offset += searchData.paging?.limit || 50;
-                  allItemIds.push(...itemIds);
-                  estadoItems += itemIds.length;
                 }
-
-                console.log(`✅ Total de publicaciones en estado ${estado}, precio ${precio}, fecha ${fecha} para ${nickname}: ${estadoItems}`);
               }
             }
           }
 
           console.log(`🔹 Total IDs recopilados para ${nickname}: ${allItemIds.length}`);
 
-          // 🔹 Obtener detalles de los IDs en lotes de 20
           const batchSize = 20;
           for (let i = 0; i < allItemIds.length; i += batchSize) {
             const batchIds = allItemIds.slice(i, i + batchSize).join(",");
@@ -94,10 +116,7 @@ const Publicaciones = () => {
 
             console.log(`📦 Obteniendo detalles: ${itemsUrl}`);
             const itemsResponse = await fetch(itemsUrl);
-            if (!itemsResponse.ok) {
-              console.error("⚠️ Error al obtener detalles de publicaciones:", itemsResponse.status);
-              continue;
-            }
+            if (!itemsResponse.ok) continue;
 
             const itemsData = await itemsResponse.json();
             const validItems = itemsData
@@ -125,31 +144,25 @@ const Publicaciones = () => {
     fetchPublicaciones();
   }, [cuentas]);
 
-  const publicacionesArray = Array.from(publicaciones.values()).filter((pub) => {
-    const matchCuenta = filtroCuenta ? pub.userNickname === filtroCuenta : true;
-    const matchTitulo = filtroTitulo ? pub.title.toLowerCase().includes(filtroTitulo.toLowerCase()) : true;
-    const matchEstado = filtroEstado ? pub.status === filtroEstado : true;
-    const matchID = filtroID ? pub.id.includes(filtroID) : true;
-    return matchCuenta && matchTitulo && matchEstado && matchID;
-  });
-
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
 
-      <p><strong>Total de publicaciones:</strong> {publicacionesArray.length}</p>
+      <p><strong>Total de publicaciones:</strong> {publicaciones.size}</p>
 
       {cargando && <p>Cargando publicaciones...</p>}
 
-      {publicacionesArray.length === 0 && !cargando ? (
+      {publicaciones.size === 0 && !cargando ? (
         <p>No se encontraron publicaciones.</p>
       ) : (
         <ul>
-          {publicacionesArray.map((pub) => (
+          {Array.from(publicaciones.values()).map((pub) => (
             <li key={pub.id}>
               <h3>{pub.title}</h3>
               <p><strong>Cuenta:</strong> {pub.userNickname}</p>
+              <p><strong>Categoría:</strong> {pub.category_id}</p>
               <p><strong>Estado:</strong> {pub.status}</p>
+              <p><strong>Tipo de Publicación:</strong> {pub.listing_type_id}</p>
               <p><strong>Precio:</strong> {pub.price}</p>
             </li>
           ))}
