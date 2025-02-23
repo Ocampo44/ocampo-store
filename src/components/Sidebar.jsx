@@ -208,6 +208,23 @@ const Sidebar = () => {
             </svg>
             {isOpen && <span className="text-lg">Publicaciones</span>}
           </Link>
+
+          {/* Ventas */}
+          <Link
+            to="/ventas"
+            className="flex items-center gap-4 px-4 py-3 hover:bg-indigo-600 transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-6 h-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6h2v13H9zM13 19V10h2v9h-2zM17 19V13h2v6h-2z" />
+            </svg>
+            {isOpen && <span className="text-lg">Ventas</span>}
+          </Link>
         </nav>
 
         {/* Pie */}

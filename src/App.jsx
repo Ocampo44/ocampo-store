@@ -35,6 +35,8 @@ import EditCompraForm from "./components/EditCompraForm";
 import MercadoLibreConnections from "./components/MercadoLibreConnections";
 // Importar Publicaciones
 import Publicaciones from "./components/Publicaciones";
+// Nueva sección de Ventas
+import Ventas from "./components/Ventas";
 
 function App() {
   const [warehouses, setWarehouses] = useState([]);
@@ -393,6 +395,8 @@ function App() {
             <Route path="/mercadolibre" element={<MercadoLibreConnections />} />
             {/* Ruta de Publicaciones */}
             <Route path="/publicaciones" element={<Publicaciones />} />
+            {/* Nueva sección: Ventas */}
+            <Route path="/ventas" element={<Ventas />} />
           </Routes>
         </div>
       </div>
