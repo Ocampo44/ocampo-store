@@ -8,7 +8,7 @@ const Publicaciones = () => {
   const [publicaciones, setPublicaciones] = useState([]);
   const [busqueda, setBusqueda] = useState("");
 
-  // Obtiene las cuentas conectadas desde Firestore
+  // 1. Escuchar cambios en Firestore para obtener las cuentas con token
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const cuentasTemp = snapshot.docs.map((doc) => ({
@@ -20,27 +20,66 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Para cada cuenta, obtiene sus publicaciones usando el endpoint de MercadoLibre
+  // 2. Para cada cuenta, obtener los IDs de sus publicaciones, 
+  //    luego obtener el detalle de cada publicación y guardarlo en "publicaciones".
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let todasLasPublicaciones = [];
+
       for (const cuenta of cuentas) {
-        // Asegúrate de que exista el token y el id del perfil
-        if (cuenta.token?.access_token && cuenta.profile && cuenta.profile.id) {
-          try {
-            const response = await fetch(
-              `https://api.mercadolibre.com/users/${cuenta.profile.id}/items/search?access_token=${cuenta.token.access_token}`
-            );
-            if (response.ok) {
-              const data = await response.json();
-              // data.results contiene los ítems publicados
-              todasLasPublicaciones = todasLasPublicaciones.concat(data.results || []);
-            }
-          } catch (error) {
-            console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
+        const accessToken = cuenta.token?.access_token;
+        const userId = cuenta.profile?.id;
+
+        if (!accessToken || !userId) continue; // si faltan datos, pasar a la siguiente cuenta
+
+        try {
+          // Primero, obtener los IDs de las publicaciones
+          const searchResponse = await fetch(
+            `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}`
+          );
+          if (!searchResponse.ok) {
+            console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
+            continue;
           }
+
+          const searchData = await searchResponse.json();
+          const itemIds = searchData.results || []; // Array de IDs de ítems
+
+          // Si no hay ítems, pasamos a la siguiente cuenta
+          if (itemIds.length === 0) continue;
+
+          // AHORA necesitamos el detalle de cada ítem
+          // Opción A: fetch uno a uno (menos eficiente si hay muchos ítems)
+          // Opción B: fetch en batch usando "?ids=id1,id2,..." (máx 20 ítems por llamada)
+          // Aquí haremos un ejemplo de batch para no saturar la API con muchas peticiones.
+
+          const batchSize = 20; 
+          for (let i = 0; i < itemIds.length; i += batchSize) {
+            const batchIds = itemIds.slice(i, i + batchSize).join(",");
+            const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
+            const itemsResponse = await fetch(itemsUrl);
+            if (!itemsResponse.ok) {
+              console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
+              continue;
+            }
+
+            // Esta llamada retorna un array de objetos, cada uno con la info del ítem
+            // Ej: [{ code: 200, body: { id, title, price, thumbnail, ... }}, ... ]
+            const itemsData = await itemsResponse.json();
+
+            // Filtramos solo los que code = 200 (por si alguno da error)
+            const validItems = itemsData
+              .filter((item) => item.code === 200)
+              .map((item) => item.body);
+
+            // Agregamos estos ítems al array general
+            todasLasPublicaciones = [...todasLasPublicaciones, ...validItems];
+          }
+        } catch (error) {
+          console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
       }
+
       setPublicaciones(todasLasPublicaciones);
     };
 
@@ -49,15 +88,16 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // Filtra las publicaciones en base a la búsqueda ingresada
-  const publicacionesFiltradas = publicaciones.filter((item) =>
-    // Se asegura que item.title esté definido
-    (item.title ? item.title.toLowerCase() : "").includes(busqueda.toLowerCase())
-  );
+  // 3. Filtrar publicaciones según el texto ingresado
+  const publicacionesFiltradas = publicaciones.filter((item) => {
+    const titulo = item.title?.toLowerCase() || "";
+    return titulo.includes(busqueda.toLowerCase());
+  });
 
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
+
       <div style={{ marginBottom: "10px" }}>
         <input
           type="text"
@@ -67,6 +107,7 @@ const Publicaciones = () => {
           style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
         />
       </div>
+
       {publicacionesFiltradas.length === 0 ? (
         <p>No se encontraron publicaciones.</p>
       ) : (
