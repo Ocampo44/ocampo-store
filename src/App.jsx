@@ -35,6 +35,8 @@ import EditCompraForm from "./components/EditCompraForm";
 import MercadoLibreConnections from "./components/MercadoLibreConnections";
 // Importar Publicaciones
 import Publicaciones from "./components/Publicaciones";
+// Nuevo componente Compras2
+import Compras2 from "./components/Compras2";
 
 function App() {
   const [warehouses, setWarehouses] = useState([]);
@@ -393,6 +395,8 @@ function App() {
             <Route path="/mercadolibre" element={<MercadoLibreConnections />} />
             {/* Ruta de Publicaciones */}
             <Route path="/publicaciones" element={<Publicaciones />} />
+            {/* Nueva ruta para Compras2 */}
+            <Route path="/compras2" element={<Compras2 />} />
           </Routes>
         </div>
       </div>
