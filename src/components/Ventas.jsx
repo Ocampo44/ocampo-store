@@ -39,6 +39,7 @@ const Ventas = () => {
       }
 
       const data = await response.json();
+      // Según la documentación, la respuesta debe tener un array "results"
       if (data.results) {
         return data.results.map((order) => ({
           ...order,

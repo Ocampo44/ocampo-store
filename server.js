@@ -19,8 +19,13 @@ app.get("/api/proxyOrders", async (req, res) => {
     return res.status(400).json({ error: "Faltan parámetros" });
   }
 
-  // Construir la URL para la API de MercadoLibre
-  const ordersUrl = `https://api.mercadolibre.com/orders/search?seller=${seller}&order.date_created.from=${encodeURIComponent(fromDate)}&order.date_created.to=${encodeURIComponent(toDate)}&order.status=paid&sort=date_desc`;
+  // Construir la URL para buscar órdenes según la documentación de MercadoLibre.
+  // Se incluye el filtro order.status=paid y se utiliza sort=date_desc (puedes ajustarlo según necesites)
+  const ordersUrl = `https://api.mercadolibre.com/orders/search?seller=${seller}&order.date_created.from=${encodeURIComponent(
+    fromDate
+  )}&order.date_created.to=${encodeURIComponent(
+    toDate
+  )}&order.status=paid&sort=date_desc`;
 
   console.log("URL de la API:", ordersUrl);
 
