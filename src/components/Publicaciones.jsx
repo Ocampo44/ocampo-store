@@ -31,6 +31,7 @@ const Publicaciones = () => {
     let url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan`;
     
     do {
+      // Si ya se obtuvo un scrollId, lo agregamos a la URL para la siguiente llamada
       if (scrollId) {
         url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan&scroll_id=${scrollId}`;
       }
@@ -64,9 +65,11 @@ const Publicaciones = () => {
         if (!accessToken || !userId) continue;
 
         try {
+          // Obtiene todos los IDs usando search_type=scan
           const itemIds = await fetchAllItemIds(userId, accessToken);
           if (itemIds.length === 0) continue;
 
+          // Procesa en lotes de 20 para no saturar la API al solicitar detalles
           const batchSize = 20;
           for (let i = 0; i < itemIds.length; i += batchSize) {
             const batchIds = itemIds.slice(i, i + batchSize).join(",");
@@ -78,12 +81,13 @@ const Publicaciones = () => {
               continue;
             }
 
+            // La respuesta es un array de objetos con { code, body }
             const itemsData = await itemsResponse.json();
 
             const validItems = itemsData
               .filter((item) => item.code === 200)
               .map((item) => ({
-                ...item.body,
+                ...item.body, // Contiene id, title, price, thumbnail, status, etc.
                 userNickname: nickname,
               }));
 
@@ -93,14 +97,8 @@ const Publicaciones = () => {
           console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
       }
-      
-      // Filtrar duplicados basados en el ID de la publicación
-      const publicacionesUnicas = todasLasPublicaciones.filter(
-        (pub, index, self) => index === self.findIndex((p) => p.id === pub.id)
-      );
-      
-      setPublicaciones(publicacionesUnicas);
-      setCurrentPage(1);
+      setPublicaciones(todasLasPublicaciones);
+      setCurrentPage(1); // Reinicia la página cuando se actualizan las publicaciones
     };
 
     if (cuentas.length > 0) {
@@ -132,10 +130,12 @@ const Publicaciones = () => {
   return (
     <div style={{ padding: "20px" }}>
       <h2>Publicaciones de usuarios conectados</h2>
+      {/* Total de publicaciones */}
       <p>
         <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
       </p>
       
+      {/* Filtros */}
       <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
         <input
           type="text"
@@ -163,6 +163,7 @@ const Publicaciones = () => {
         </select>
       </div>
 
+      {/* Listado de publicaciones */}
       {publicacionesPaginadas.length === 0 ? (
         <p>No se encontraron publicaciones.</p>
       ) : (
@@ -205,6 +206,7 @@ const Publicaciones = () => {
         </ul>
       )}
 
+      {/* Paginación */}
       {totalPaginas > 1 && (
         <div style={{ display: "flex", gap: "5px", marginTop: "20px", flexWrap: "wrap" }}>
           {Array.from({ length: totalPaginas }, (_, idx) => idx + 1).map((num) => (
