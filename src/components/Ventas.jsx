@@ -7,42 +7,45 @@ const Ventas = () => {
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState("");
 
-  // Función que consulta órdenes para una cuenta específica
+  // Helper para obtener la fecha actual truncada hasta la hora (minutos, segundos y ms en cero)
+  const getCurrentHourISOString = () => {
+    const now = new Date();
+    now.setMinutes(0, 0, 0);
+    // toISOString() devuelve algo como "2025-02-24T12:00:00.000Z".
+    // Reemplazamos la "Z" por "-00:00" para coincidir con el formato requerido.
+    return now.toISOString().replace("Z", "-00:00");
+  };
+
+  // Fecha de inicio fija: 22 de enero de 2023 a las 00:00:00
+  const fromDate = "2023-01-22T00:00:00.000-00:00";
+
+  // Función que consulta órdenes para una cuenta específica aplicando el filtro por fecha y status "paid"
   const fetchOrdersForAccount = async (accessToken, sellerId, nickname) => {
-    // Se actualiza la fecha a formato ISO con "Z" (UTC)
-    const fromDate = "2023-01-22T00:00:00.000Z";
-    // Se recomienda convertir el sellerId a string si es numérico
-    const ordersUrl = `https://api.mercadolibre.com/orders/search?seller=${sellerId.toString()}&order.date_created.from=${encodeURIComponent(
+    const toDate = getCurrentHourISOString();
+    const ordersUrl = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${encodeURIComponent(
       fromDate
+    )}&order.date_created.to=${encodeURIComponent(
+      toDate
     )}&order.status=paid&sort=date_desc`;
-    
+
     try {
       const response = await fetch(ordersUrl, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       });
-      
-      // Log para ver el status de la respuesta
-      console.log(`Respuesta para ${nickname}:`, response.status);
-      
       if (!response.ok) {
         console.error(`Error al obtener órdenes para ${nickname}:`, response.status);
         return [];
       }
-      
       const data = await response.json();
-      // Log para inspeccionar la respuesta completa
-      console.log(`Datos recibidos para ${nickname}:`, data);
-      
-      if (data.results && data.results.length > 0) {
-        // Se asocia la cuenta (nickname) a cada orden para diferenciarlas
+      if (data.results) {
+        // Se añade el nickname a cada orden para identificar la cuenta
         return data.results.map((order) => ({
           ...order,
           account: nickname,
         }));
       }
-      
       return [];
     } catch (error) {
       console.error(`Error en fetchOrdersForAccount para ${nickname}:`, error);
@@ -54,23 +57,28 @@ const Ventas = () => {
   const fetchAllOrders = async () => {
     try {
       const usersSnapshot = await getDocs(collection(db, "mercadolibreUsers"));
-      const ordersPromises = [];
+      let totalOrders = 0;
+      // Reiniciamos el estado para evitar duplicados en cada llamada
+      setOrders([]);
       usersSnapshot.forEach((docSnap) => {
         const userData = docSnap.data();
         const accessToken = userData.token?.access_token;
-        const sellerId = userData.profile?.id; // Se asume que el id del vendedor es el id del perfil
+        const sellerId = userData.profile?.id;
         const nickname = userData.profile?.nickname || "Sin Nombre";
         if (accessToken && sellerId) {
-          ordersPromises.push(fetchOrdersForAccount(accessToken, sellerId, nickname));
-        } else {
-          console.warn(`Cuenta sin token o sellerId para ${nickname}`);
+          fetchOrdersForAccount(accessToken, sellerId, nickname)
+            .then((newOrders) => {
+              if (newOrders.length > 0) {
+                setOrders((prevOrders) => [...prevOrders, ...newOrders]);
+                totalOrders += newOrders.length;
+                setStatus(`Se encontraron ${totalOrders} órdenes desde el 22 de enero.`);
+              }
+            })
+            .catch((error) => {
+              console.error(`Error al obtener órdenes para ${nickname}:`, error);
+            });
         }
       });
-
-      const ordersPerAccount = await Promise.all(ordersPromises);
-      const allOrders = ordersPerAccount.flat();
-      setOrders(allOrders);
-      setStatus(`Se encontraron ${allOrders.length} órdenes desde el 22 de enero.`);
     } catch (error) {
       console.error("Error al obtener cuentas de MercadoLibre:", error);
       setStatus("Error al cargar las órdenes.");
@@ -78,7 +86,14 @@ const Ventas = () => {
   };
 
   useEffect(() => {
+    // Carga inicial de órdenes
     fetchAllOrders();
+    // Configura polling cada 60 segundos para actualizar en tiempo real
+    const intervalId = setInterval(() => {
+      fetchAllOrders();
+    }, 60000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   return (
@@ -150,7 +165,7 @@ const styles = {
     padding: "10px",
   },
   tr: {
-    // Opcional: alternar colores de fondo para mayor legibilidad
+    // Opcional: se pueden alternar colores de fondo para mayor legibilidad
   },
   noOrders: {
     textAlign: "center",
