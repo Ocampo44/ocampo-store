@@ -18,22 +18,16 @@ const Ventas = () => {
   // Fecha de inicio fija: 22 de enero de 2023 a las 00:00:00
   const fromDate = "2023-01-22T00:00:00.000-00:00";
 
-  // Función que consulta órdenes para una cuenta específica utilizando el filtro por fecha y status "paid"
-  const fetchOrdersForAccount = async (accessToken, sellerId, nickname) => {
+  // Función que consulta órdenes para una cuenta específica usando el proxy
+  const fetchOrdersForAccount = async (sellerId, nickname) => {
     const toDate = getCurrentHourISOString();
-    // Se arma la URL siguiendo el ejemplo de la documentación
-    const ordersUrl = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${encodeURIComponent(
+    // Llamada a nuestro endpoint proxy en lugar de la API directa
+    const proxyUrl = `/api/proxyOrders?seller=${sellerId}&fromDate=${encodeURIComponent(
       fromDate
-    )}&order.date_created.to=${encodeURIComponent(
-      toDate
-    )}&order.status=paid&sort=date_desc`;
+    )}&toDate=${encodeURIComponent(toDate)}`;
 
     try {
-      const response = await fetch(ordersUrl, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+      const response = await fetch(proxyUrl);
       if (!response.ok) {
         console.error(`Error al obtener órdenes para ${nickname}:`, response.status);
         return [];
@@ -60,13 +54,15 @@ const Ventas = () => {
       let totalOrders = 0;
       // Reiniciamos el estado para evitar duplicados en cada llamada
       setOrders([]);
+
       usersSnapshot.forEach((docSnap) => {
         const userData = docSnap.data();
-        const accessToken = userData.token?.access_token;
         const sellerId = userData.profile?.id;
         const nickname = userData.profile?.nickname || "Sin Nombre";
-        if (accessToken && sellerId) {
-          fetchOrdersForAccount(accessToken, sellerId, nickname)
+
+        // Solo hacemos la llamada si existe un sellerId válido
+        if (sellerId) {
+          fetchOrdersForAccount(sellerId, nickname)
             .then((newOrders) => {
               if (newOrders.length > 0) {
                 setOrders((prevOrders) => [...prevOrders, ...newOrders]);
@@ -155,13 +151,13 @@ const styles = {
     borderCollapse: "collapse",
   },
   th: {
-    border: "1px solid #ddd",
+    border: "1px solid "#ddd",
     padding: "10px",
     backgroundColor: "#f2f2f2",
     textAlign: "left",
   },
   td: {
-    border: "1px solid #ddd",
+    border: "1px solid "#ddd",
     padding: "10px",
   },
   tr: {
