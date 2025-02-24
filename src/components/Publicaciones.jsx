@@ -7,13 +7,13 @@ const ITEMS_PER_PAGE = 20;
 const getStatusStyle = (status) => {
   switch (status) {
     case "active":
-      return { backgroundColor: "#2ecc71", color: "#fff", padding: "2px 6px", borderRadius: "4px" };
+      return { backgroundColor: "#2ecc71", color: "#fff", padding: "2px 4px", borderRadius: "4px" };
     case "paused":
-      return { backgroundColor: "#f1c40f", color: "#fff", padding: "2px 6px", borderRadius: "4px" };
+      return { backgroundColor: "#f1c40f", color: "#fff", padding: "2px 4px", borderRadius: "4px" };
     case "closed":
-      return { backgroundColor: "#e74c3c", color: "#fff", padding: "2px 6px", borderRadius: "4px" };
+      return { backgroundColor: "#e74c3c", color: "#fff", padding: "2px 4px", borderRadius: "4px" };
     default:
-      return { backgroundColor: "#95a5a6", color: "#fff", padding: "2px 6px", borderRadius: "4px" };
+      return { backgroundColor: "#95a5a6", color: "#fff", padding: "2px 4px", borderRadius: "4px" };
   }
 };
 
@@ -46,13 +46,11 @@ const Publicaciones = () => {
       if (scrollId) {
         url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan&scroll_id=${scrollId}`;
       }
-
       const response = await fetch(url);
       if (!response.ok) {
         console.error("Error al obtener publicaciones en modo scan:", response.status);
         break;
       }
-
       const data = await response.json();
       if (data.results && Array.isArray(data.results)) {
         allIds = [...allIds, ...data.results];
@@ -66,39 +64,32 @@ const Publicaciones = () => {
   useEffect(() => {
     const fetchPublicaciones = async () => {
       setPublicaciones([]);
-
       for (const cuenta of cuentas) {
         const accessToken = cuenta.token?.access_token;
         const userId = cuenta.profile?.id;
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
-
         if (!accessToken || !userId) continue;
 
         try {
           const itemIds = await fetchAllItemIds(userId, accessToken);
           if (itemIds.length === 0) continue;
-
           const batchSize = 20;
           for (let i = 0; i < itemIds.length; i += batchSize) {
             const batchIds = itemIds.slice(i, i + batchSize).join(",");
             const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
             const itemsResponse = await fetch(itemsUrl);
-
             if (!itemsResponse.ok) {
               console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
               continue;
             }
-
             const itemsData = await itemsResponse.json();
-
             const validItems = itemsData
               .filter((item) => item.code === 200)
               .map((item) => ({
                 ...item.body,
                 userNickname: nickname,
               }));
-
-            setPublicaciones((prevPublicaciones) => [...prevPublicaciones, ...validItems]);
+            setPublicaciones((prev) => [...prev, ...validItems]);
           }
         } catch (error) {
           console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
@@ -147,24 +138,24 @@ const Publicaciones = () => {
   };
 
   return (
-    <div style={{ width: "100%", padding: "10px", boxSizing: "border-box", backgroundColor: "#f7f9fa" }}>
-      <h2 style={{ textAlign: "center", color: "#2c3e50", marginBottom: "15px" }}>
+    <div style={{ width: "100%", padding: "8px", boxSizing: "border-box", backgroundColor: "#f7f9fa" }}>
+      <h2 style={{ textAlign: "center", color: "#2c3e50", marginBottom: "10px", fontSize: "1.2rem" }}>
         Publicaciones de usuarios conectados
       </h2>
       <div
         style={{
           background: "#ecf0f1",
-          padding: "10px",
-          borderRadius: "8px",
-          marginBottom: "15px",
+          padding: "8px",
+          borderRadius: "6px",
+          marginBottom: "10px",
           display: "flex",
           flexWrap: "wrap",
-          gap: "10px",
-          justifyContent: "center"
+          gap: "8px",
+          justifyContent: "center",
         }}
       >
-        <p style={{ flexBasis: "100%", textAlign: "center", margin: 0 }}>
-          <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
+        <p style={{ flexBasis: "100%", textAlign: "center", margin: 0, fontSize: "0.9rem" }}>
+          <strong>Total:</strong> {publicacionesFiltradas.length}
         </p>
         <input
           type="text"
@@ -175,25 +166,27 @@ const Publicaciones = () => {
             setCurrentPage(1);
           }}
           style={{
-            padding: "8px",
+            padding: "4px 6px",
             border: "1px solid #bdc3c7",
             borderRadius: "4px",
-            flex: "1 1 200px"
+            flex: "1 1 150px",
+            fontSize: "0.8rem",
           }}
         />
         <input
           type="text"
-          placeholder="Filtrar por ID de MercadoLibre..."
+          placeholder="Filtrar por ID..."
           value={busquedaId}
           onChange={(e) => {
             setBusquedaId(e.target.value);
             setCurrentPage(1);
           }}
           style={{
-            padding: "8px",
+            padding: "4px 6px",
             border: "1px solid #bdc3c7",
             borderRadius: "4px",
-            flex: "1 1 200px"
+            flex: "1 1 150px",
+            fontSize: "0.8rem",
           }}
         />
         <select
@@ -203,10 +196,11 @@ const Publicaciones = () => {
             setCurrentPage(1);
           }}
           style={{
-            padding: "8px",
+            padding: "4px 6px",
             border: "1px solid #bdc3c7",
             borderRadius: "4px",
-            flex: "1 1 150px"
+            flex: "1 1 120px",
+            fontSize: "0.8rem",
           }}
         >
           {estadosDisponibles.map((estado) => (
@@ -222,10 +216,11 @@ const Publicaciones = () => {
             setCurrentPage(1);
           }}
           style={{
-            padding: "8px",
+            padding: "4px 6px",
             border: "1px solid #bdc3c7",
             borderRadius: "4px",
-            flex: "1 1 150px"
+            flex: "1 1 120px",
+            fontSize: "0.8rem",
           }}
         >
           {cuentasDisponibles.map((cuenta) => (
@@ -237,9 +232,9 @@ const Publicaciones = () => {
       </div>
 
       {publicacionesPaginadas.length === 0 ? (
-        <p style={{ textAlign: "center", color: "#e74c3c" }}>No se encontraron publicaciones.</p>
+        <p style={{ textAlign: "center", color: "#e74c3c", fontSize: "0.9rem" }}>No se encontraron publicaciones.</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           {publicacionesPaginadas.map((pub) => (
             <div
               key={pub.id}
@@ -247,33 +242,32 @@ const Publicaciones = () => {
                 background: "#fff",
                 border: "1px solid #ddd",
                 borderRadius: "4px",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                 display: "flex",
                 flexDirection: "row",
                 overflow: "hidden",
                 width: "100%",
-                padding: "5px"
+                padding: "4px",
               }}
             >
               <img
                 src={pub.thumbnail}
                 alt={pub.title}
-                style={{ width: "150px", height: "100px", objectFit: "cover" }}
+                style={{ width: "120px", height: "80px", objectFit: "cover", flexShrink: 0 }}
               />
-              <div style={{ padding: "5px", flex: "1", fontSize: "0.9rem" }}>
-                <h3 style={{ margin: "0 0 4px 0", color: "#34495e", fontSize: "1rem" }}>
+              <div style={{ padding: "4px", flex: "1", fontSize: "0.8rem", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <h3 style={{ margin: "0 0 2px 0", color: "#34495e", fontSize: "0.9rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {pub.title}
                 </h3>
-                <p style={{ margin: "2px 0", color: "#7f8c8d" }}>
+                <p style={{ margin: "0", color: "#7f8c8d" }}>
                   <strong>Precio:</strong> {pub.price} {pub.currency_id}
                 </p>
-                <p style={{ margin: "2px 0", color: "#7f8c8d" }}>
+                <p style={{ margin: "0", color: "#7f8c8d" }}>
                   <strong>Cuenta:</strong> {pub.userNickname}
                 </p>
-                <p style={{ margin: "2px 0", color: "#7f8c8d" }}>
+                <p style={{ margin: "0", color: "#7f8c8d" }}>
                   <strong>ID:</strong> {pub.id}
                 </p>
-                <p style={{ margin: "2px 0", display: "flex", alignItems: "center", gap: "6px" }}>
+                <p style={{ margin: "0", display: "flex", alignItems: "center", gap: "4px" }}>
                   <strong>Estado:</strong>
                   <span style={getStatusStyle(pub.status)}>{pub.status}</span>
                 </p>
@@ -284,42 +278,36 @@ const Publicaciones = () => {
       )}
 
       {totalPaginas > 1 && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            marginTop: "10px",
-            gap: "10px"
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginTop: "6px", gap: "6px" }}>
           <button
             onClick={handlePaginaAnterior}
             disabled={currentPage === 1}
             style={{
-              padding: "8px 12px",
+              padding: "4px 8px",
               border: "none",
               borderRadius: "4px",
               backgroundColor: currentPage === 1 ? "#bdc3c7" : "#3498db",
               color: "#fff",
-              cursor: currentPage === 1 ? "not-allowed" : "pointer"
+              cursor: currentPage === 1 ? "not-allowed" : "pointer",
+              fontSize: "0.8rem",
             }}
           >
             Anterior
           </button>
-          <span style={{ fontWeight: "bold", color: "#2c3e50" }}>
+          <span style={{ fontWeight: "bold", color: "#2c3e50", fontSize: "0.8rem" }}>
             Página {currentPage} de {totalPaginas}
           </span>
           <button
             onClick={handlePaginaSiguiente}
             disabled={currentPage === totalPaginas}
             style={{
-              padding: "8px 12px",
+              padding: "4px 8px",
               border: "none",
               borderRadius: "4px",
               backgroundColor: currentPage === totalPaginas ? "#bdc3c7" : "#3498db",
               color: "#fff",
-              cursor: currentPage === totalPaginas ? "not-allowed" : "pointer"
+              cursor: currentPage === totalPaginas ? "not-allowed" : "pointer",
+              fontSize: "0.8rem",
             }}
           >
             Siguiente
