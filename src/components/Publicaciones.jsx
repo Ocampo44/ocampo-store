@@ -7,13 +7,13 @@ const ITEMS_PER_PAGE = 20;
 const getStatusStyle = (status) => {
   switch (status) {
     case "active":
-      return { backgroundColor: "#2ecc71", color: "#fff", padding: "2px 8px", borderRadius: "4px" };
+      return { backgroundColor: "#2ecc71", color: "#fff", padding: "2px 6px", borderRadius: "4px" };
     case "paused":
-      return { backgroundColor: "#f1c40f", color: "#fff", padding: "2px 8px", borderRadius: "4px" };
+      return { backgroundColor: "#f1c40f", color: "#fff", padding: "2px 6px", borderRadius: "4px" };
     case "closed":
-      return { backgroundColor: "#e74c3c", color: "#fff", padding: "2px 8px", borderRadius: "4px" };
+      return { backgroundColor: "#e74c3c", color: "#fff", padding: "2px 6px", borderRadius: "4px" };
     default:
-      return { backgroundColor: "#95a5a6", color: "#fff", padding: "2px 8px", borderRadius: "4px" };
+      return { backgroundColor: "#95a5a6", color: "#fff", padding: "2px 6px", borderRadius: "4px" };
   }
 };
 
@@ -147,19 +147,19 @@ const Publicaciones = () => {
   };
 
   return (
-    <div style={{ width: "100%", padding: "20px", boxSizing: "border-box", backgroundColor: "#f7f9fa" }}>
-      <h2 style={{ textAlign: "center", color: "#2c3e50", marginBottom: "20px" }}>
+    <div style={{ width: "100%", padding: "10px", boxSizing: "border-box", backgroundColor: "#f7f9fa" }}>
+      <h2 style={{ textAlign: "center", color: "#2c3e50", marginBottom: "15px" }}>
         Publicaciones de usuarios conectados
       </h2>
       <div
         style={{
           background: "#ecf0f1",
-          padding: "15px",
+          padding: "10px",
           borderRadius: "8px",
-          marginBottom: "20px",
+          marginBottom: "15px",
           display: "flex",
           flexWrap: "wrap",
-          gap: "15px",
+          gap: "10px",
           justifyContent: "center"
         }}
       >
@@ -175,10 +175,10 @@ const Publicaciones = () => {
             setCurrentPage(1);
           }}
           style={{
-            padding: "10px",
+            padding: "8px",
             border: "1px solid #bdc3c7",
             borderRadius: "4px",
-            flex: "1 1 250px"
+            flex: "1 1 200px"
           }}
         />
         <input
@@ -190,10 +190,10 @@ const Publicaciones = () => {
             setCurrentPage(1);
           }}
           style={{
-            padding: "10px",
+            padding: "8px",
             border: "1px solid #bdc3c7",
             borderRadius: "4px",
-            flex: "1 1 250px"
+            flex: "1 1 200px"
           }}
         />
         <select
@@ -203,10 +203,10 @@ const Publicaciones = () => {
             setCurrentPage(1);
           }}
           style={{
-            padding: "10px",
+            padding: "8px",
             border: "1px solid #bdc3c7",
             borderRadius: "4px",
-            flex: "1 1 200px"
+            flex: "1 1 150px"
           }}
         >
           {estadosDisponibles.map((estado) => (
@@ -222,10 +222,10 @@ const Publicaciones = () => {
             setCurrentPage(1);
           }}
           style={{
-            padding: "10px",
+            padding: "8px",
             border: "1px solid #bdc3c7",
             borderRadius: "4px",
-            flex: "1 1 200px"
+            flex: "1 1 150px"
           }}
         >
           {cuentasDisponibles.map((cuenta) => (
@@ -239,41 +239,41 @@ const Publicaciones = () => {
       {publicacionesPaginadas.length === 0 ? (
         <p style={{ textAlign: "center", color: "#e74c3c" }}>No se encontraron publicaciones.</p>
       ) : (
-        // Se reemplaza el grid por un contenedor de filas
-        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {publicacionesPaginadas.map((pub) => (
             <div
               key={pub.id}
               style={{
                 background: "#fff",
                 border: "1px solid #ddd",
-                borderRadius: "6px",
-                boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
+                borderRadius: "4px",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                 display: "flex",
                 flexDirection: "row",
                 overflow: "hidden",
-                width: "100%"
+                width: "100%",
+                padding: "5px"
               }}
             >
               <img
                 src={pub.thumbnail}
                 alt={pub.title}
-                style={{ width: "250px", height: "auto", objectFit: "cover" }}
+                style={{ width: "150px", height: "100px", objectFit: "cover" }}
               />
-              <div style={{ padding: "15px", flex: "1" }}>
-                <h3 style={{ margin: "0 0 8px 0", color: "#34495e", fontSize: "1.1rem" }}>
+              <div style={{ padding: "5px", flex: "1", fontSize: "0.9rem" }}>
+                <h3 style={{ margin: "0 0 4px 0", color: "#34495e", fontSize: "1rem" }}>
                   {pub.title}
                 </h3>
-                <p style={{ margin: "4px 0", color: "#7f8c8d" }}>
+                <p style={{ margin: "2px 0", color: "#7f8c8d" }}>
                   <strong>Precio:</strong> {pub.price} {pub.currency_id}
                 </p>
-                <p style={{ margin: "4px 0", color: "#7f8c8d" }}>
+                <p style={{ margin: "2px 0", color: "#7f8c8d" }}>
                   <strong>Cuenta:</strong> {pub.userNickname}
                 </p>
-                <p style={{ margin: "4px 0", color: "#7f8c8d" }}>
+                <p style={{ margin: "2px 0", color: "#7f8c8d" }}>
                   <strong>ID:</strong> {pub.id}
                 </p>
-                <p style={{ margin: "4px 0", display: "flex", alignItems: "center", gap: "8px" }}>
+                <p style={{ margin: "2px 0", display: "flex", alignItems: "center", gap: "6px" }}>
                   <strong>Estado:</strong>
                   <span style={getStatusStyle(pub.status)}>{pub.status}</span>
                 </p>
@@ -289,7 +289,7 @@ const Publicaciones = () => {
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            marginTop: "20px",
+            marginTop: "10px",
             gap: "10px"
           }}
         >
@@ -297,7 +297,7 @@ const Publicaciones = () => {
             onClick={handlePaginaAnterior}
             disabled={currentPage === 1}
             style={{
-              padding: "10px 15px",
+              padding: "8px 12px",
               border: "none",
               borderRadius: "4px",
               backgroundColor: currentPage === 1 ? "#bdc3c7" : "#3498db",
@@ -314,7 +314,7 @@ const Publicaciones = () => {
             onClick={handlePaginaSiguiente}
             disabled={currentPage === totalPaginas}
             style={{
-              padding: "10px 15px",
+              padding: "8px 12px",
               border: "none",
               borderRadius: "4px",
               backgroundColor: currentPage === totalPaginas ? "#bdc3c7" : "#3498db",
