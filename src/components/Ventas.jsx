@@ -151,13 +151,13 @@ const styles = {
     borderCollapse: "collapse",
   },
   th: {
-    border: "1px solid "#ddd",
+    border: "1px solid #ddd",
     padding: "10px",
     backgroundColor: "#f2f2f2",
     textAlign: "left",
   },
   td: {
-    border: "1px solid "#ddd",
+    border: "1px solid #ddd",
     padding: "10px",
   },
   tr: {
