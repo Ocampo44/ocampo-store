@@ -1,274 +1,151 @@
+// src/components/Publicaciones.jsx
 import React, { useState, useEffect, useMemo } from "react";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "../firebaseConfig";
 
 const ITEMS_PER_PAGE = 20;
 
-const styles = {
-  container: {
-    width: "100%",
-    padding: "10px 20px",
-    fontFamily: "'Roboto', sans-serif",
-    color: "#444",
-    backgroundColor: "#f7f9fc",
-    boxSizing: "border-box",
-  },
-  header: {
-    textAlign: "center",
-    marginBottom: "20px",
-  },
-  filtersContainer: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "20px",
-    justifyContent: "center",
-    marginBottom: "10px",
-  },
-  input: {
-    padding: "10px",
-    width: "250px",
-    border: "1px solid #ccc",
-    borderRadius: "4px",
-    fontSize: "16px",
-  },
-  select: {
-    padding: "10px",
-    width: "250px",
-    border: "1px solid #ccc",
-    borderRadius: "4px",
-    fontSize: "16px",
-    backgroundColor: "#fff",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
-  th: {
-    textAlign: "left",
-    padding: "12px",
-    backgroundColor: "#1976d2",
-    color: "#fff",
-    fontSize: "16px",
-  },
-  td: {
-    padding: "12px",
-    borderBottom: "1px solid #ddd",
-    verticalAlign: "middle",
-  },
-  img: {
-    width: "80px",
-    height: "80px",
-    objectFit: "cover",
-    borderRadius: "4px",
-  },
-  statusBadge: (status) => {
-    let backgroundColor = "#999";
-    if (status === "active") backgroundColor = "#4caf50"; // verde
-    else if (status === "paused") backgroundColor = "#ff9800"; // naranja
-    else if (status === "inactive") backgroundColor = "#f44336"; // rojo
-    return {
-      padding: "5px 10px",
-      borderRadius: "12px",
-      backgroundColor,
-      color: "#fff",
-      fontSize: "12px",
-      textTransform: "capitalize",
-      textAlign: "center",
-      minWidth: "80px",
-    };
-  },
-  pagination: {
-    display: "flex",
-    justifyContent: "center",
-    marginTop: "20px",
-    gap: "15px",
-  },
-  button: {
-    padding: "10px 20px",
-    border: "none",
-    borderRadius: "4px",
-    fontSize: "16px",
-    cursor: "pointer",
-    backgroundColor: "#1976d2",
-    color: "#fff",
-    transition: "background-color 0.3s",
-  },
-  buttonDisabled: {
-    backgroundColor: "#ccc",
-    cursor: "default",
-  },
-};
-
-// Arreglo estático para simular cuentas (reemplaza los datos según corresponda)
-const dummyCuentas = [
-  {
-    id: "cuenta1",
-    token: { access_token: "TU_ACCESS_TOKEN" },
-    profile: { id: "TU_USER_ID", nickname: "Cuenta Dummy" },
-  },
-];
-
 const Publicaciones = () => {
-  const [cuentas] = useState(dummyCuentas);
+  const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState([]);
-  const [busquedaTitulo, setBusquedaTitulo] = useState("");
-  const [busquedaId, setBusquedaId] = useState("");
+  const [busqueda, setBusqueda] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("Todos");
-  const [selectedCuenta, setSelectedCuenta] = useState("Todas");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Función para obtener todos los IDs de publicaciones usando search_type=scan
+  // 1. Escuchar cambios en Firestore para obtener las cuentas con token
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
+      const cuentasTemp = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setCuentas(cuentasTemp);
+    });
+    return () => unsub();
+  }, []);
+
+  // 2. Función para obtener todos los IDs de publicaciones usando search_type=scan
   const fetchAllItemIds = async (userId, accessToken) => {
     let allIds = [];
     let scrollId = null;
     let url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan`;
-
+    
     do {
       if (scrollId) {
         url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan&scroll_id=${scrollId}`;
       }
+      
       const response = await fetch(url);
       if (!response.ok) {
         console.error("Error al obtener publicaciones en modo scan:", response.status);
         break;
       }
+      
       const data = await response.json();
       if (data.results && Array.isArray(data.results)) {
         allIds = [...allIds, ...data.results];
       }
       scrollId = data.scroll_id;
     } while (scrollId);
-
+    
     return allIds;
   };
 
-  // Función que actualiza en segundo plano las publicaciones (sin Firebase)
-  const fetchPublicaciones = async () => {
-    let todasLasPublicaciones = [];
-
-    for (const cuenta of cuentas) {
-      const accessToken = cuenta.token?.access_token;
-      const userId = cuenta.profile?.id;
-      const nickname = cuenta.profile?.nickname || "Sin Nombre";
-
-      if (!accessToken || !userId) continue;
-
-      try {
-        const itemIds = await fetchAllItemIds(userId, accessToken);
-        if (itemIds.length === 0) continue;
-
-        const batchSize = 20;
-        for (let i = 0; i < itemIds.length; i += batchSize) {
-          const batchIds = itemIds.slice(i, i + batchSize).join(",");
-          const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
-          const itemsResponse = await fetch(itemsUrl);
-
-          if (!itemsResponse.ok) {
-            console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
-            continue;
-          }
-
-          const itemsData = await itemsResponse.json();
-
-          const validItems = itemsData
-            .filter((item) => item.code === 200)
-            .map((item) => ({
-              ...item.body,
-              userNickname: nickname,
-            }));
-
-          todasLasPublicaciones = [...todasLasPublicaciones, ...validItems];
-        }
-      } catch (error) {
-        console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
-      }
-    }
-
-    // Filtrar duplicados basados en el ID de la publicación
-    const publicacionesUnicas = todasLasPublicaciones.filter(
-      (pub, index, self) => index === self.findIndex((p) => p.id === pub.id)
-    );
-
-    setPublicaciones(publicacionesUnicas);
-    setCurrentPage(1);
-  };
-
+  // 3. Obtener publicaciones de cada cuenta usando el modo scan
   useEffect(() => {
-    fetchPublicaciones();
-  }, []);
+    const fetchPublicaciones = async () => {
+      let todasLasPublicaciones = [];
 
-  // Filtros: título, id, status y cuenta
+      for (const cuenta of cuentas) {
+        const accessToken = cuenta.token?.access_token;
+        const userId = cuenta.profile?.id;
+        const nickname = cuenta.profile?.nickname || "Sin Nombre";
+
+        if (!accessToken || !userId) continue;
+
+        try {
+          const itemIds = await fetchAllItemIds(userId, accessToken);
+          if (itemIds.length === 0) continue;
+
+          const batchSize = 20;
+          for (let i = 0; i < itemIds.length; i += batchSize) {
+            const batchIds = itemIds.slice(i, i + batchSize).join(",");
+            const itemsUrl = `https://api.mercadolibre.com/items?ids=${batchIds}&access_token=${accessToken}`;
+            const itemsResponse = await fetch(itemsUrl);
+
+            if (!itemsResponse.ok) {
+              console.error("Error al obtener detalles de publicaciones:", itemsResponse.status);
+              continue;
+            }
+
+            const itemsData = await itemsResponse.json();
+
+            const validItems = itemsData
+              .filter((item) => item.code === 200)
+              .map((item) => ({
+                ...item.body,
+                userNickname: nickname,
+              }));
+
+            todasLasPublicaciones = [...todasLasPublicaciones, ...validItems];
+          }
+        } catch (error) {
+          console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
+        }
+      }
+      
+      // Filtrar duplicados basados en el ID de la publicación
+      const publicacionesUnicas = todasLasPublicaciones.filter(
+        (pub, index, self) => index === self.findIndex((p) => p.id === pub.id)
+      );
+      
+      setPublicaciones(publicacionesUnicas);
+      setCurrentPage(1);
+    };
+
+    if (cuentas.length > 0) {
+      fetchPublicaciones();
+    }
+  }, [cuentas]);
+
+  // 4. Filtrar publicaciones según la búsqueda y el estado seleccionado
   const publicacionesFiltradas = useMemo(() => {
     return publicaciones.filter((item) => {
       const titulo = item.title?.toLowerCase() || "";
-      const idPublicacion = item.id?.toString() || "";
-      const filtroTitulo = titulo.includes(busquedaTitulo.toLowerCase());
-      const filtroId = busquedaId.trim() === "" || idPublicacion.includes(busquedaId);
-      const filtroStatus = selectedStatus === "Todos" || item.status === selectedStatus;
-      const filtroCuenta =
-        selectedCuenta === "Todas" || item.userNickname === selectedCuenta;
-      return filtroTitulo && filtroId && filtroStatus && filtroCuenta;
+      const busquedaOk = titulo.includes(busqueda.toLowerCase());
+      const statusOk = selectedStatus === "Todos" || item.status === selectedStatus;
+      return busquedaOk && statusOk;
     });
-  }, [publicaciones, busquedaTitulo, busquedaId, selectedStatus, selectedCuenta]);
+  }, [publicaciones, busqueda, selectedStatus]);
 
-  // Paginación
+  // 5. Paginación
   const totalPaginas = Math.ceil(publicacionesFiltradas.length / ITEMS_PER_PAGE);
   const indexInicio = (currentPage - 1) * ITEMS_PER_PAGE;
-  const publicacionesPaginadas = publicacionesFiltradas.slice(
-    indexInicio,
-    indexInicio + ITEMS_PER_PAGE
-  );
+  const publicacionesPaginadas = publicacionesFiltradas.slice(indexInicio, indexInicio + ITEMS_PER_PAGE);
 
-  // Dropdown de estados disponibles
+  // 6. Obtener lista de estados disponibles para el dropdown
   const estadosDisponibles = useMemo(() => {
     const estados = publicaciones.map((pub) => pub.status);
     return ["Todos", ...Array.from(new Set(estados))];
   }, [publicaciones]);
 
-  // Dropdown de cuentas disponibles
-  const cuentasDisponibles = useMemo(() => {
-    const nombres = cuentas.map(
-      (cuenta) => cuenta.profile?.nickname || "Sin Nombre"
-    );
-    return ["Todas", ...Array.from(new Set(nombres))];
-  }, [cuentas]);
-
-  // Funciones de paginación
-  const handleAnterior = () => {
-    if (currentPage > 1) setCurrentPage(currentPage - 1);
-  };
-
-  const handleSiguiente = () => {
-    if (currentPage < totalPaginas) setCurrentPage(currentPage + 1);
-  };
-
   return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <h2>Publicaciones de Usuarios Conectados</h2>
-        <p>
-          <strong>Total:</strong> {publicacionesFiltradas.length} publicaciones
-        </p>
-      </header>
-
-      <div style={styles.filtersContainer}>
+    <div style={{ padding: "20px" }}>
+      <h2>Publicaciones de usuarios conectados</h2>
+      <p>
+        <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
+      </p>
+      
+      <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
         <input
           type="text"
-          placeholder="Buscar por título..."
-          value={busquedaTitulo}
+          placeholder="Buscar ítems..."
+          value={busqueda}
           onChange={(e) => {
-            setBusquedaTitulo(e.target.value);
+            setBusqueda(e.target.value);
             setCurrentPage(1);
           }}
-          style={styles.input}
-        />
-        <input
-          type="text"
-          placeholder="Buscar por ID..."
-          value={busquedaId}
-          onChange={(e) => {
-            setBusquedaId(e.target.value);
-            setCurrentPage(1);
-          }}
-          style={styles.input}
+          style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
         />
         <select
           value={selectedStatus}
@@ -276,7 +153,7 @@ const Publicaciones = () => {
             setSelectedStatus(e.target.value);
             setCurrentPage(1);
           }}
-          style={styles.select}
+          style={{ padding: "8px" }}
         >
           {estadosDisponibles.map((estado) => (
             <option key={estado} value={estado}>
@@ -284,79 +161,66 @@ const Publicaciones = () => {
             </option>
           ))}
         </select>
-        <select
-          value={selectedCuenta}
-          onChange={(e) => {
-            setSelectedCuenta(e.target.value);
-            setCurrentPage(1);
-          }}
-          style={styles.select}
-        >
-          {cuentasDisponibles.map((cuenta) => (
-            <option key={cuenta} value={cuenta}>
-              {cuenta}
-            </option>
-          ))}
-        </select>
       </div>
 
       {publicacionesPaginadas.length === 0 ? (
-        <p style={{ textAlign: "center" }}>No se encontraron publicaciones.</p>
+        <p>No se encontraron publicaciones.</p>
       ) : (
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Imagen</th>
-              <th style={styles.th}>Título</th>
-              <th style={styles.th}>Precio</th>
-              <th style={styles.th}>Cuenta</th>
-              <th style={styles.th}>ID</th>
-              <th style={styles.th}>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {publicacionesPaginadas.map((pub) => (
-              <tr key={pub.id}>
-                <td style={styles.td}>
-                  <img src={pub.thumbnail} alt={pub.title} style={styles.img} />
-                </td>
-                <td style={styles.td}>{pub.title}</td>
-                <td style={styles.td}>
-                  {pub.price} {pub.currency_id}
-                </td>
-                <td style={styles.td}>{pub.userNickname}</td>
-                <td style={styles.td}>{pub.id}</td>
-                <td style={styles.td}>
-                  <span style={styles.statusBadge(pub.status)}>{pub.status}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ul style={{ listStyle: "none", padding: 0 }}>
+          {publicacionesPaginadas.map((pub) => (
+            <li
+              key={pub.id}
+              style={{
+                border: "1px solid #ddd",
+                padding: "10px",
+                marginBottom: "10px",
+                borderRadius: "4px",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "10px",
+              }}
+            >
+              <img
+                src={pub.thumbnail}
+                alt={pub.title}
+                style={{ width: "60px", height: "60px", objectFit: "cover" }}
+              />
+              <div>
+                <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
+                <p style={{ margin: 0 }}>
+                  Precio: {pub.price} {pub.currency_id}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Cuenta:</strong> {pub.userNickname}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>ID de la publicación:</strong> {pub.id}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Estado:</strong> {pub.status}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
 
       {totalPaginas > 1 && (
-        <div style={styles.pagination}>
-          <button
-            onClick={handleAnterior}
-            disabled={currentPage === 1}
-            style={{
-              ...styles.button,
-              ...(currentPage === 1 ? styles.buttonDisabled : {}),
-            }}
-          >
-            Anterior
-          </button>
-          <button
-            onClick={handleSiguiente}
-            disabled={currentPage === totalPaginas}
-            style={{
-              ...styles.button,
-              ...(currentPage === totalPaginas ? styles.buttonDisabled : {}),
-            }}
-          >
-            Siguiente
-          </button>
+        <div style={{ display: "flex", gap: "5px", marginTop: "20px", flexWrap: "wrap" }}>
+          {Array.from({ length: totalPaginas }, (_, idx) => idx + 1).map((num) => (
+            <button
+              key={num}
+              onClick={() => setCurrentPage(num)}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #ddd",
+                backgroundColor: num === currentPage ? "#eee" : "#fff",
+                cursor: "pointer",
+              }}
+            >
+              {num}
+            </button>
+          ))}
         </div>
       )}
     </div>
