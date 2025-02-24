@@ -252,7 +252,7 @@ const Publicaciones = () => {
               <img
                 src={pub.thumbnail}
                 alt={pub.title}
-                style={{ width: "80px", height: "50px", objectFit: "cover", flexShrink: 0 }}
+                style={{ width: "50px", height: "40px", objectFit: "cover", flexShrink: 0 }}
               />
               <div style={{ padding: "4px", flex: "1", fontSize: "0.8rem", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <h3 style={{ margin: "0 0 2px 0", color: "#34495e", fontSize: "0.9rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
