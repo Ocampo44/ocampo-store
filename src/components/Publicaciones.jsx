@@ -1,114 +1,14 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
+// src/components/Publicaciones.jsx
+import React, { useState, useEffect } from "react";
+import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
-
-const ITEMS_PER_PAGE = 20;
-
-const styles = {
-  container: {
-    width: "100%",
-    padding: "10px 20px",
-    fontFamily: "'Roboto', sans-serif",
-    color: "#444",
-    backgroundColor: "#f7f9fc",
-    boxSizing: "border-box",
-  },
-  header: {
-    textAlign: "center",
-    marginBottom: "20px",
-  },
-  filtersContainer: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "20px",
-    justifyContent: "center",
-    marginBottom: "10px",
-  },
-  input: {
-    padding: "10px",
-    width: "250px",
-    border: "1px solid #ccc",
-    borderRadius: "4px",
-    fontSize: "16px",
-  },
-  select: {
-    padding: "10px",
-    width: "250px",
-    border: "1px solid #ccc",
-    borderRadius: "4px",
-    fontSize: "16px",
-    backgroundColor: "#fff",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
-  th: {
-    textAlign: "left",
-    padding: "12px",
-    backgroundColor: "#1976d2",
-    color: "#fff",
-    fontSize: "16px",
-  },
-  td: {
-    padding: "12px",
-    borderBottom: "1px solid #ddd",
-    verticalAlign: "middle",
-  },
-  img: {
-    width: "80px",
-    height: "80px",
-    objectFit: "cover",
-    borderRadius: "4px",
-  },
-  statusBadge: (status) => {
-    let backgroundColor = "#999";
-    if (status === "active") backgroundColor = "#4caf50"; // verde
-    else if (status === "paused") backgroundColor = "#ff9800"; // naranja
-    else if (status === "inactive") backgroundColor = "#f44336"; // rojo
-    return {
-      padding: "5px 10px",
-      borderRadius: "12px",
-      backgroundColor,
-      color: "#fff",
-      fontSize: "12px",
-      textTransform: "capitalize",
-      textAlign: "center",
-      minWidth: "80px",
-    };
-  },
-  pagination: {
-    display: "flex",
-    justifyContent: "center",
-    marginTop: "20px",
-    gap: "15px",
-  },
-  button: {
-    padding: "10px 20px",
-    border: "none",
-    borderRadius: "4px",
-    fontSize: "16px",
-    cursor: "pointer",
-    backgroundColor: "#1976d2",
-    color: "#fff",
-    transition: "background-color 0.3s",
-  },
-  buttonDisabled: {
-    backgroundColor: "#ccc",
-    cursor: "default",
-  },
-};
 
 const Publicaciones = () => {
   const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState([]);
-  const [busquedaTitulo, setBusquedaTitulo] = useState("");
-  const [busquedaId, setBusquedaId] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("Todos");
-  const [selectedCuenta, setSelectedCuenta] = useState("Todas");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [busqueda, setBusqueda] = useState("");
 
-  // Listener para las cuentas en Firestore
+  // 1. Escuchar cambios en Firestore para obtener las cuentas con token
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const cuentasTemp = snapshot.docs.map((doc) => ({
@@ -120,41 +20,8 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // Listener para la colección "publicaciones" en Firestore
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, "publicaciones"), (snapshot) => {
-      const pubs = snapshot.docs.map((doc) => doc.data());
-      setPublicaciones(pubs);
-    });
-    return () => unsub();
-  }, []);
-
-  // Función para obtener todos los IDs de publicaciones usando search_type=scan
-  const fetchAllItemIds = async (userId, accessToken) => {
-    let allIds = [];
-    let scrollId = null;
-    let url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan`;
-
-    do {
-      if (scrollId) {
-        url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan&scroll_id=${scrollId}`;
-      }
-      const response = await fetch(url);
-      if (!response.ok) {
-        console.error("Error al obtener publicaciones en modo scan:", response.status);
-        break;
-      }
-      const data = await response.json();
-      if (data.results && Array.isArray(data.results)) {
-        allIds = [...allIds, ...data.results];
-      }
-      scrollId = data.scroll_id;
-    } while (scrollId);
-
-    return allIds;
-  };
-
-  // Actualización en segundo plano de las publicaciones en Firestore
+  // 2. Para cada cuenta, obtener los IDs de sus publicaciones,
+  //    luego obtener el detalle de cada publicación y guardarlo en "publicaciones".
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let todasLasPublicaciones = [];
@@ -164,12 +31,25 @@ const Publicaciones = () => {
         const userId = cuenta.profile?.id;
         const nickname = cuenta.profile?.nickname || "Sin Nombre";
 
-        if (!accessToken || !userId) continue;
+        if (!accessToken || !userId) continue; // si faltan datos, pasar a la siguiente cuenta
 
         try {
-          const itemIds = await fetchAllItemIds(userId, accessToken);
+          // Primero, obtener los IDs de las publicaciones
+          const searchResponse = await fetch(
+            `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}`
+          );
+          if (!searchResponse.ok) {
+            console.error("Error al obtener IDs de publicaciones:", searchResponse.status);
+            continue;
+          }
+
+          const searchData = await searchResponse.json();
+          const itemIds = searchData.results || []; // Array de IDs de ítems
+
+          // Si no hay ítems, pasamos a la siguiente cuenta
           if (itemIds.length === 0) continue;
 
+          // Usamos batch de 20 en 20 para no saturar la API
           const batchSize = 20;
           for (let i = 0; i < itemIds.length; i += batchSize) {
             const batchIds = itemIds.slice(i, i + batchSize).join(",");
@@ -181,15 +61,21 @@ const Publicaciones = () => {
               continue;
             }
 
+            // itemsResponse.json() retorna un array: [{ code, body: { ...itemData }}, ...]
             const itemsData = await itemsResponse.json();
 
+            // Filtramos solo los que tienen code=200 (peticiones exitosas)
             const validItems = itemsData
               .filter((item) => item.code === 200)
-              .map((item) => ({
-                ...item.body,
-                userNickname: nickname,
-              }));
+              .map((item) => {
+                // Agregamos nickname al objeto body
+                return {
+                  ...item.body, // Contiene id, title, price, thumbnail, status, etc.
+                  userNickname: nickname,
+                };
+              });
 
+            // Agregamos estos ítems al array general
             todasLasPublicaciones = [...todasLasPublicaciones, ...validItems];
           }
         } catch (error) {
@@ -197,21 +83,7 @@ const Publicaciones = () => {
         }
       }
 
-      // Filtrar duplicados basados en el ID de la publicación
-      const publicacionesUnicas = todasLasPublicaciones.filter(
-        (pub, index, self) => index === self.findIndex((p) => p.id === pub.id)
-      );
-
-      // Guarda cada publicación en Firestore
-      publicacionesUnicas.forEach(async (pub) => {
-        try {
-          await setDoc(doc(db, "publicaciones", pub.id.toString()), pub, { merge: true });
-        } catch (error) {
-          console.error("Error al guardar la publicación con id:", pub.id, error);
-        }
-      });
-      // El listener en Firestore actualizará el estado, por lo que no es necesario llamar a setPublicaciones aquí.
-      setCurrentPage(1);
+      setPublicaciones(todasLasPublicaciones);
     };
 
     if (cuentas.length > 0) {
@@ -219,169 +91,69 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // Filtros: título, id, status y cuenta
-  const publicacionesFiltradas = useMemo(() => {
-    return publicaciones.filter((item) => {
-      const titulo = item.title?.toLowerCase() || "";
-      const idPublicacion = item.id?.toString() || "";
-      const filtroTitulo = titulo.includes(busquedaTitulo.toLowerCase());
-      const filtroId = busquedaId.trim() === "" || idPublicacion.includes(busquedaId);
-      const filtroStatus = selectedStatus === "Todos" || item.status === selectedStatus;
-      const filtroCuenta =
-        selectedCuenta === "Todas" || item.userNickname === selectedCuenta;
-      return filtroTitulo && filtroId && filtroStatus && filtroCuenta;
-    });
-  }, [publicaciones, busquedaTitulo, busquedaId, selectedStatus, selectedCuenta]);
-
-  // Paginación
-  const totalPaginas = Math.ceil(publicacionesFiltradas.length / ITEMS_PER_PAGE);
-  const indexInicio = (currentPage - 1) * ITEMS_PER_PAGE;
-  const publicacionesPaginadas = publicacionesFiltradas.slice(
-    indexInicio,
-    indexInicio + ITEMS_PER_PAGE
-  );
-
-  // Dropdown de estados disponibles
-  const estadosDisponibles = useMemo(() => {
-    const estados = publicaciones.map((pub) => pub.status);
-    return ["Todos", ...Array.from(new Set(estados))];
-  }, [publicaciones]);
-
-  // Dropdown de cuentas disponibles
-  const cuentasDisponibles = useMemo(() => {
-    const nombres = cuentas.map(
-      (cuenta) => cuenta.profile?.nickname || "Sin Nombre"
-    );
-    return ["Todas", ...Array.from(new Set(nombres))];
-  }, [cuentas]);
-
-  // Funciones de paginación
-  const handleAnterior = () => {
-    if (currentPage > 1) setCurrentPage(currentPage - 1);
-  };
-
-  const handleSiguiente = () => {
-    if (currentPage < totalPaginas) setCurrentPage(currentPage + 1);
-  };
+  // 3. Filtrar publicaciones según el texto ingresado
+  const publicacionesFiltradas = publicaciones.filter((item) => {
+    const titulo = item.title?.toLowerCase() || "";
+    return titulo.includes(busqueda.toLowerCase());
+  });
 
   return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <h2>Publicaciones de Usuarios Conectados</h2>
-        <p>
-          <strong>Total:</strong> {publicacionesFiltradas.length} publicaciones
-        </p>
-      </header>
+    <div style={{ padding: "20px" }}>
+      <h2>Publicaciones de usuarios conectados</h2>
 
-      <div style={styles.filtersContainer}>
+      <div style={{ marginBottom: "10px" }}>
         <input
           type="text"
-          placeholder="Buscar por título..."
-          value={busquedaTitulo}
-          onChange={(e) => {
-            setBusquedaTitulo(e.target.value);
-            setCurrentPage(1);
-          }}
-          style={styles.input}
+          placeholder="Buscar ítems..."
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
         />
-        <input
-          type="text"
-          placeholder="Buscar por ID..."
-          value={busquedaId}
-          onChange={(e) => {
-            setBusquedaId(e.target.value);
-            setCurrentPage(1);
-          }}
-          style={styles.input}
-        />
-        <select
-          value={selectedStatus}
-          onChange={(e) => {
-            setSelectedStatus(e.target.value);
-            setCurrentPage(1);
-          }}
-          style={styles.select}
-        >
-          {estadosDisponibles.map((estado) => (
-            <option key={estado} value={estado}>
-              {estado}
-            </option>
-          ))}
-        </select>
-        <select
-          value={selectedCuenta}
-          onChange={(e) => {
-            setSelectedCuenta(e.target.value);
-            setCurrentPage(1);
-          }}
-          style={styles.select}
-        >
-          {cuentasDisponibles.map((cuenta) => (
-            <option key={cuenta} value={cuenta}>
-              {cuenta}
-            </option>
-          ))}
-        </select>
       </div>
 
-      {publicacionesPaginadas.length === 0 ? (
-        <p style={{ textAlign: "center" }}>No se encontraron publicaciones.</p>
+      {publicacionesFiltradas.length === 0 ? (
+        <p>No se encontraron publicaciones.</p>
       ) : (
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Imagen</th>
-              <th style={styles.th}>Título</th>
-              <th style={styles.th}>Precio</th>
-              <th style={styles.th}>Cuenta</th>
-              <th style={styles.th}>ID</th>
-              <th style={styles.th}>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {publicacionesPaginadas.map((pub) => (
-              <tr key={pub.id}>
-                <td style={styles.td}>
-                  <img src={pub.thumbnail} alt={pub.title} style={styles.img} />
-                </td>
-                <td style={styles.td}>{pub.title}</td>
-                <td style={styles.td}>
-                  {pub.price} {pub.currency_id}
-                </td>
-                <td style={styles.td}>{pub.userNickname}</td>
-                <td style={styles.td}>{pub.id}</td>
-                <td style={styles.td}>
-                  <span style={styles.statusBadge(pub.status)}>{pub.status}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+        <ul style={{ listStyle: "none", padding: 0 }}>
+          {publicacionesFiltradas.map((pub) => (
+            <li
+              key={pub.id}
+              style={{
+                border: "1px solid #ddd",
+                padding: "10px",
+                marginBottom: "10px",
+                borderRadius: "4px",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "10px",
+              }}
+            >
+              {/* Imagen */}
+              <img
+                src={pub.thumbnail}
+                alt={pub.title}
+                style={{ width: "60px", height: "60px", objectFit: "cover" }}
+              />
 
-      {totalPaginas > 1 && (
-        <div style={styles.pagination}>
-          <button
-            onClick={handleAnterior}
-            disabled={currentPage === 1}
-            style={{
-              ...styles.button,
-              ...(currentPage === 1 ? styles.buttonDisabled : {}),
-            }}
-          >
-            Anterior
-          </button>
-          <button
-            onClick={handleSiguiente}
-            disabled={currentPage === totalPaginas}
-            style={{
-              ...styles.button,
-              ...(currentPage === totalPaginas ? styles.buttonDisabled : {}),
-            }}
-          >
-            Siguiente
-          </button>
-        </div>
+              {/* Información del ítem */}
+              <div>
+                <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
+                <p style={{ margin: 0 }}>
+                  Precio: {pub.price} {pub.currency_id}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Cuenta:</strong> {pub.userNickname}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>ID de la publicación:</strong> {pub.id}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Estado:</strong> {pub.status}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
