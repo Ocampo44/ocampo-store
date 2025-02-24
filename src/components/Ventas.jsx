@@ -9,9 +9,10 @@ const Ventas = () => {
 
   // Función que consulta órdenes para una cuenta específica
   const fetchOrdersForAccount = async (accessToken, sellerId, nickname) => {
-    // Fecha de inicio: 22 de enero (en formato ISO con zona horaria)
-    const fromDate = "2023-01-22T00:00:00.000-00:00";
-    const ordersUrl = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${encodeURIComponent(
+    // Se actualiza la fecha a formato ISO con "Z" (UTC)
+    const fromDate = "2023-01-22T00:00:00.000Z";
+    // Se recomienda convertir el sellerId a string si es numérico
+    const ordersUrl = `https://api.mercadolibre.com/orders/search?seller=${sellerId.toString()}&order.date_created.from=${encodeURIComponent(
       fromDate
     )}&order.status=paid&sort=date_desc`;
     
@@ -21,18 +22,27 @@ const Ventas = () => {
           Authorization: `Bearer ${accessToken}`,
         },
       });
+      
+      // Log para ver el status de la respuesta
+      console.log(`Respuesta para ${nickname}:`, response.status);
+      
       if (!response.ok) {
         console.error(`Error al obtener órdenes para ${nickname}:`, response.status);
         return [];
       }
+      
       const data = await response.json();
-      if (data.results) {
+      // Log para inspeccionar la respuesta completa
+      console.log(`Datos recibidos para ${nickname}:`, data);
+      
+      if (data.results && data.results.length > 0) {
         // Se asocia la cuenta (nickname) a cada orden para diferenciarlas
         return data.results.map((order) => ({
           ...order,
           account: nickname,
         }));
       }
+      
       return [];
     } catch (error) {
       console.error(`Error en fetchOrdersForAccount para ${nickname}:`, error);
@@ -52,6 +62,8 @@ const Ventas = () => {
         const nickname = userData.profile?.nickname || "Sin Nombre";
         if (accessToken && sellerId) {
           ordersPromises.push(fetchOrdersForAccount(accessToken, sellerId, nickname));
+        } else {
+          console.warn(`Cuenta sin token o sellerId para ${nickname}`);
         }
       });
 
@@ -81,7 +93,6 @@ const Ventas = () => {
               <th style={styles.th}>Cuenta</th>
               <th style={styles.th}>Fecha de Creación</th>
               <th style={styles.th}>Estado</th>
-              {/* Puedes agregar más columnas para mostrar otros detalles, como total_amount, pagos, etc. */}
             </tr>
           </thead>
           <tbody>
