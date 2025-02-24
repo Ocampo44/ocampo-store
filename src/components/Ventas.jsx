@@ -1,4 +1,3 @@
-// src/components/Ventas.jsx
 import React, { useEffect, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebaseConfig";
@@ -21,7 +20,7 @@ const Ventas = () => {
   // Función que consulta órdenes para una cuenta específica usando el proxy
   const fetchOrdersForAccount = async (sellerId, nickname) => {
     const toDate = getCurrentHourISOString();
-    // Llamada a nuestro endpoint proxy en lugar de la API directa
+    // Llamada a nuestro endpoint proxy utilizando template literal
     const proxyUrl = `/api/proxyOrders?seller=${sellerId}&fromDate=${encodeURIComponent(
       fromDate
     )}&toDate=${encodeURIComponent(toDate)}`;
@@ -112,7 +111,9 @@ const Ventas = () => {
                 <td style={styles.td}>{order.id}</td>
                 <td style={styles.td}>{order.account}</td>
                 <td style={styles.td}>
-                  {order.date_created ? new Date(order.date_created).toLocaleString() : "N/A"}
+                  {order.date_created
+                    ? new Date(order.date_created).toLocaleString()
+                    : "N/A"}
                 </td>
                 <td style={styles.td}>{order.status || "N/A"}</td>
               </tr>

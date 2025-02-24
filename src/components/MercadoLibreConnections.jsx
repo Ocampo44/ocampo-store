@@ -1,4 +1,3 @@
-// src/components/MercadoLibreConnections.jsx
 import React, { useEffect, useState } from "react";
 import {
   collection,
@@ -165,7 +164,9 @@ const MercadoLibreConnections = () => {
           { token: tokenData, profile: profileData, code },
           { merge: true }
         );
-        setStatus(renewAccountId ? "Token renovado exitosamente" : "Cuenta conectada exitosamente");
+        setStatus(
+          renewAccountId ? "Token renovado exitosamente" : "Cuenta conectada exitosamente"
+        );
         if (renewAccountId) localStorage.removeItem("renewAccountId");
       };
       processCode();
@@ -231,9 +232,7 @@ const MercadoLibreConnections = () => {
                 backgroundColor: tokenStatuses[account.id] ? "#d4edda" : "#f8d7da",
               }}
             >
-              <td style={styles.td}>
-                {account.profile?.nickname || "Sin Nombre"}
-              </td>
+              <td style={styles.td}>{account.profile?.nickname || "Sin Nombre"}</td>
               <td style={styles.td}>{account.id}</td>
               <td style={styles.td}>
                 {tokenStatuses[account.id] ? "Activo" : "Inactivo"}
