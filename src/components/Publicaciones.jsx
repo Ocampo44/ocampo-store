@@ -9,10 +9,12 @@ const Publicaciones = () => {
   const [cuentas, setCuentas] = useState([]);
   const [publicaciones, setPublicaciones] = useState([]);
   const [busqueda, setBusqueda] = useState("");
+  const [busquedaId, setBusquedaId] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("Todos");
+  const [selectedCuenta, setSelectedCuenta] = useState("Todas");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // 1. Escuchar cambios en Firestore para obtener las cuentas con token
+  // Escuchar cambios en Firestore para obtener las cuentas con token
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "mercadolibreUsers"), (snapshot) => {
       const cuentasTemp = snapshot.docs.map((doc) => ({
@@ -24,14 +26,13 @@ const Publicaciones = () => {
     return () => unsub();
   }, []);
 
-  // 2. Función para obtener todos los IDs de publicaciones usando search_type=scan
+  // Función para obtener todos los IDs de publicaciones usando search_type=scan
   const fetchAllItemIds = async (userId, accessToken) => {
     let allIds = [];
     let scrollId = null;
     let url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan`;
     
     do {
-      // Si ya se obtuvo un scrollId, lo agregamos a la URL para la siguiente llamada
       if (scrollId) {
         url = `https://api.mercadolibre.com/users/${userId}/items/search?access_token=${accessToken}&search_type=scan&scroll_id=${scrollId}`;
       }
@@ -52,7 +53,7 @@ const Publicaciones = () => {
     return allIds;
   };
 
-  // 3. Obtener publicaciones de cada cuenta usando el modo scan
+  // Obtener publicaciones de cada cuenta usando el modo scan
   useEffect(() => {
     const fetchPublicaciones = async () => {
       let todasLasPublicaciones = [];
@@ -65,11 +66,9 @@ const Publicaciones = () => {
         if (!accessToken || !userId) continue;
 
         try {
-          // Obtiene todos los IDs usando search_type=scan
           const itemIds = await fetchAllItemIds(userId, accessToken);
           if (itemIds.length === 0) continue;
 
-          // Procesa en lotes de 20 para no saturar la API al solicitar detalles
           const batchSize = 20;
           for (let i = 0; i < itemIds.length; i += batchSize) {
             const batchIds = itemIds.slice(i, i + batchSize).join(",");
@@ -81,7 +80,6 @@ const Publicaciones = () => {
               continue;
             }
 
-            // La respuesta es un array de objetos con { code, body }
             const itemsData = await itemsResponse.json();
 
             const validItems = itemsData
@@ -98,7 +96,7 @@ const Publicaciones = () => {
         }
       }
       setPublicaciones(todasLasPublicaciones);
-      setCurrentPage(1); // Reinicia la página cuando se actualizan las publicaciones
+      setCurrentPage(1);
     };
 
     if (cuentas.length > 0) {
@@ -106,98 +104,160 @@ const Publicaciones = () => {
     }
   }, [cuentas]);
 
-  // 4. Filtrar publicaciones según la búsqueda y el estado seleccionado
+  // Filtro de publicaciones según búsqueda, ID, estado y cuenta
   const publicacionesFiltradas = useMemo(() => {
     return publicaciones.filter((item) => {
       const titulo = item.title?.toLowerCase() || "";
+      const idItem = item.id?.toString() || "";
       const busquedaOk = titulo.includes(busqueda.toLowerCase());
+      const busquedaIdOk = idItem.includes(busquedaId);
       const statusOk = selectedStatus === "Todos" || item.status === selectedStatus;
-      return busquedaOk && statusOk;
+      const cuentaOk = selectedCuenta === "Todas" || item.userNickname === selectedCuenta;
+      return busquedaOk && busquedaIdOk && statusOk && cuentaOk;
     });
-  }, [publicaciones, busqueda, selectedStatus]);
+  }, [publicaciones, busqueda, busquedaId, selectedStatus, selectedCuenta]);
 
-  // 5. Paginación
+  // Paginación
   const totalPaginas = Math.ceil(publicacionesFiltradas.length / ITEMS_PER_PAGE);
   const indexInicio = (currentPage - 1) * ITEMS_PER_PAGE;
   const publicacionesPaginadas = publicacionesFiltradas.slice(indexInicio, indexInicio + ITEMS_PER_PAGE);
 
-  // 6. Obtener lista de estados disponibles para el dropdown
+  // Lista de estados disponibles
   const estadosDisponibles = useMemo(() => {
     const estados = publicaciones.map((pub) => pub.status);
     return ["Todos", ...Array.from(new Set(estados))];
   }, [publicaciones]);
 
+  // Lista de cuentas disponibles para el filtro
+  const cuentasDisponibles = useMemo(() => {
+    const nombres = cuentas.map((cuenta) => cuenta.profile?.nickname || "Sin Nombre");
+    return ["Todas", ...Array.from(new Set(nombres))];
+  }, [cuentas]);
+
+  // Manejo de paginación con botones "Anterior" y "Siguiente"
+  const handlePaginaAnterior = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  const handlePaginaSiguiente = () => {
+    if (currentPage < totalPaginas) setCurrentPage(currentPage + 1);
+  };
+
   return (
-    <div style={{ padding: "20px" }}>
-      <h2>Publicaciones de usuarios conectados</h2>
-      {/* Total de publicaciones */}
-      <p>
-        <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
-      </p>
-      
-      {/* Filtros */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
-        <input
-          type="text"
-          placeholder="Buscar ítems..."
-          value={busqueda}
-          onChange={(e) => {
-            setBusqueda(e.target.value);
-            setCurrentPage(1);
-          }}
-          style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
-        />
-        <select
-          value={selectedStatus}
-          onChange={(e) => {
-            setSelectedStatus(e.target.value);
-            setCurrentPage(1);
-          }}
-          style={{ padding: "8px" }}
-        >
-          {estadosDisponibles.map((estado) => (
-            <option key={estado} value={estado}>
-              {estado}
-            </option>
-          ))}
-        </select>
+    <div style={{ padding: "20px", fontFamily: "Arial, sans-serif", maxWidth: "1200px", margin: "0 auto" }}>
+      <h2 style={{ textAlign: "center", color: "#2c3e50" }}>Publicaciones de usuarios conectados</h2>
+      <div style={{ background: "#ecf0f1", padding: "15px", borderRadius: "8px", marginBottom: "20px" }}>
+        <p>
+          <strong>Total de publicaciones:</strong> {publicacionesFiltradas.length}
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "15px", justifyContent: "center" }}>
+          <input
+            type="text"
+            placeholder="Buscar por título..."
+            value={busqueda}
+            onChange={(e) => {
+              setBusqueda(e.target.value);
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: "10px",
+              border: "1px solid #bdc3c7",
+              borderRadius: "4px",
+              flex: "1 1 250px"
+            }}
+          />
+          <input
+            type="text"
+            placeholder="Filtrar por ID de MercadoLibre..."
+            value={busquedaId}
+            onChange={(e) => {
+              setBusquedaId(e.target.value);
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: "10px",
+              border: "1px solid #bdc3c7",
+              borderRadius: "4px",
+              flex: "1 1 250px"
+            }}
+          />
+          <select
+            value={selectedStatus}
+            onChange={(e) => {
+              setSelectedStatus(e.target.value);
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: "10px",
+              border: "1px solid #bdc3c7",
+              borderRadius: "4px",
+              flex: "1 1 200px"
+            }}
+          >
+            {estadosDisponibles.map((estado) => (
+              <option key={estado} value={estado}>
+                {estado}
+              </option>
+            ))}
+          </select>
+          <select
+            value={selectedCuenta}
+            onChange={(e) => {
+              setSelectedCuenta(e.target.value);
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: "10px",
+              border: "1px solid #bdc3c7",
+              borderRadius: "4px",
+              flex: "1 1 200px"
+            }}
+          >
+            {cuentasDisponibles.map((cuenta) => (
+              <option key={cuenta} value={cuenta}>
+                {cuenta}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {/* Listado de publicaciones */}
       {publicacionesPaginadas.length === 0 ? (
-        <p>No se encontraron publicaciones.</p>
+        <p style={{ textAlign: "center", color: "#e74c3c" }}>No se encontraron publicaciones.</p>
       ) : (
         <ul style={{ listStyle: "none", padding: 0 }}>
           {publicacionesPaginadas.map((pub) => (
             <li
               key={pub.id}
               style={{
+                background: "#fff",
                 border: "1px solid #ddd",
-                padding: "10px",
-                marginBottom: "10px",
-                borderRadius: "4px",
+                padding: "15px",
+                marginBottom: "15px",
+                borderRadius: "6px",
                 display: "flex",
-                alignItems: "flex-start",
-                gap: "10px",
+                alignItems: "center",
+                gap: "15px",
+                boxShadow: "0 2px 5px rgba(0,0,0,0.1)"
               }}
             >
               <img
                 src={pub.thumbnail}
                 alt={pub.title}
-                style={{ width: "60px", height: "60px", objectFit: "cover" }}
+                style={{ width: "80px", height: "80px", objectFit: "cover", borderRadius: "4px" }}
               />
-              <div>
-                <h3 style={{ margin: "0 0 5px 0" }}>{pub.title}</h3>
-                <p style={{ margin: 0 }}>
-                  Precio: {pub.price} {pub.currency_id}
+              <div style={{ flex: "1" }}>
+                <h3 style={{ margin: "0 0 8px 0", color: "#34495e" }}>{pub.title}</h3>
+                <p style={{ margin: "4px 0", color: "#7f8c8d" }}>
+                  <strong>Precio:</strong> {pub.price} {pub.currency_id}
                 </p>
-                <p style={{ margin: 0 }}>
+                <p style={{ margin: "4px 0", color: "#7f8c8d" }}>
                   <strong>Cuenta:</strong> {pub.userNickname}
                 </p>
-                <p style={{ margin: 0 }}>
-                  <strong>ID de la publicación:</strong> {pub.id}
+                <p style={{ margin: "4px 0", color: "#7f8c8d" }}>
+                  <strong>ID:</strong> {pub.id}
                 </p>
-                <p style={{ margin: 0 }}>
+                <p style={{ margin: "4px 0", color: "#7f8c8d" }}>
                   <strong>Estado:</strong> {pub.status}
                 </p>
               </div>
@@ -206,23 +266,40 @@ const Publicaciones = () => {
         </ul>
       )}
 
-      {/* Paginación */}
+      {/* Controles de paginación */}
       {totalPaginas > 1 && (
-        <div style={{ display: "flex", gap: "5px", marginTop: "20px", flexWrap: "wrap" }}>
-          {Array.from({ length: totalPaginas }, (_, idx) => idx + 1).map((num) => (
-            <button
-              key={num}
-              onClick={() => setCurrentPage(num)}
-              style={{
-                padding: "8px 12px",
-                border: "1px solid #ddd",
-                backgroundColor: num === currentPage ? "#eee" : "#fff",
-                cursor: "pointer",
-              }}
-            >
-              {num}
-            </button>
-          ))}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginTop: "20px", gap: "10px" }}>
+          <button
+            onClick={handlePaginaAnterior}
+            disabled={currentPage === 1}
+            style={{
+              padding: "10px 15px",
+              border: "none",
+              borderRadius: "4px",
+              backgroundColor: currentPage === 1 ? "#bdc3c7" : "#3498db",
+              color: "#fff",
+              cursor: currentPage === 1 ? "not-allowed" : "pointer"
+            }}
+          >
+            Anterior
+          </button>
+          <span style={{ fontWeight: "bold", color: "#2c3e50" }}>
+            Página {currentPage} de {totalPaginas}
+          </span>
+          <button
+            onClick={handlePaginaSiguiente}
+            disabled={currentPage === totalPaginas}
+            style={{
+              padding: "10px 15px",
+              border: "none",
+              borderRadius: "4px",
+              backgroundColor: currentPage === totalPaginas ? "#bdc3c7" : "#3498db",
+              color: "#fff",
+              cursor: currentPage === totalPaginas ? "not-allowed" : "pointer"
+            }}
+          >
+            Siguiente
+          </button>
         </div>
       )}
     </div>
