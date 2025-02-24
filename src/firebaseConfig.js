@@ -1,18 +1,17 @@
 // src/firebaseConfig.js
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-// Si necesitas Analytics, descomenta la siguiente línea:
-// import { getAnalytics } from "firebase/analytics";
+import { getAnalytics } from "firebase/analytics";
 
-// Tu configuración de Firebase
+// Configuración actualizada de Firebase
 const firebaseConfig = {
-  apiKey: "AIzaSyDwlBYLr5hTFZwxwpbB_9HaCop_VE3l3Uo",
-  authDomain: "sistema-de-inventarios-63b5f.firebaseapp.com",
-  projectId: "sistema-de-inventarios-63b5f",
-  storageBucket: "sistema-de-inventarios-63b5f.firebasestorage.app",
-  messagingSenderId: "608990255818",
-  appId: "1:608990255818:web:3ea2413a71b2d283f33233",
-  measurementId: "G-174PK18J6J"
+  apiKey: "AIzaSyBGUxXSua0qhbSlcOOXzgBW0I6XQfsGD0M",
+  authDomain: "prieba1-c0221.firebaseapp.com",
+  projectId: "prieba1-c0221",
+  storageBucket: "prieba1-c0221.firebasestorage.app",
+  messagingSenderId: "960029128533",
+  appId: "1:960029128533:web:e8510b204027f578cce1dc",
+  measurementId: "G-0FXJZF6GJ4"
 };
 
 // Inicializa Firebase
@@ -21,7 +20,7 @@ const app = initializeApp(firebaseConfig);
 // Inicializa Firestore
 const db = getFirestore(app);
 
-// Si necesitas Analytics, descomenta:
-// const analytics = getAnalytics(app);
+// Inicializa Analytics
+const analytics = getAnalytics(app);
 
-export { app, db };
+export { app, db, analytics };
