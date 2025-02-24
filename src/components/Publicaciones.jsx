@@ -5,7 +5,6 @@ import { db } from "../firebaseConfig";
 const ITEMS_PER_PAGE = 20;
 
 const getStatusStyle = (status) => {
-  // Ajusta estos estilos y colores según los posibles estados que manejes
   switch (status) {
     case "active":
       return { backgroundColor: "#2ecc71", color: "#fff", padding: "2px 8px", borderRadius: "4px" };
@@ -240,13 +239,8 @@ const Publicaciones = () => {
       {publicacionesPaginadas.length === 0 ? (
         <p style={{ textAlign: "center", color: "#e74c3c" }}>No se encontraron publicaciones.</p>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: "20px"
-          }}
-        >
+        // Se reemplaza el grid por un contenedor de filas
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           {publicacionesPaginadas.map((pub) => (
             <div
               key={pub.id}
@@ -256,17 +250,20 @@ const Publicaciones = () => {
                 borderRadius: "6px",
                 boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
                 display: "flex",
-                flexDirection: "column",
-                overflow: "hidden"
+                flexDirection: "row",
+                overflow: "hidden",
+                width: "100%"
               }}
             >
               <img
                 src={pub.thumbnail}
                 alt={pub.title}
-                style={{ width: "100%", height: "180px", objectFit: "cover" }}
+                style={{ width: "250px", height: "auto", objectFit: "cover" }}
               />
               <div style={{ padding: "15px", flex: "1" }}>
-                <h3 style={{ margin: "0 0 8px 0", color: "#34495e", fontSize: "1.1rem" }}>{pub.title}</h3>
+                <h3 style={{ margin: "0 0 8px 0", color: "#34495e", fontSize: "1.1rem" }}>
+                  {pub.title}
+                </h3>
                 <p style={{ margin: "4px 0", color: "#7f8c8d" }}>
                   <strong>Precio:</strong> {pub.price} {pub.currency_id}
                 </p>
