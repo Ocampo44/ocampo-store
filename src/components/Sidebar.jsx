@@ -1,6 +1,5 @@
-// src/components/Sidebar.jsx
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 
 const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -8,12 +7,13 @@ const Sidebar = () => {
   // Función de ejemplo para MercadoLibre
   const handleMercadoLibre = () => {
     console.log("Navegando a la sección MercadoLibre");
-    // Podrías redirigir manualmente o simplemente usar <Link />
   };
 
   return (
     <div
-      className={`fixed top-0 left-0 h-full bg-gradient-to-b from-blue-800 to-indigo-700 text-white shadow-2xl transition-all duration-300 z-50 ${isOpen ? 'w-64' : 'w-16'}`}
+      className={`fixed top-0 left-0 h-full bg-gradient-to-b from-blue-800 to-indigo-700 text-white shadow-2xl transition-all duration-300 z-50 ${
+        isOpen ? "w-64" : "w-16"
+      }`}
       onMouseEnter={() => setIsOpen(true)}
       onMouseLeave={() => setIsOpen(false)}
     >
@@ -221,7 +221,12 @@ const Sidebar = () => {
               viewBox="0 0 24 24"
               stroke="currentColor"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6h2v13H9zM13 19V10h2v9h-2zM17 19V13h2v6h-2z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M9 19V6h2v13H9zM13 19V10h2v9h-2zM17 19V13h2v6h-2z"
+              />
             </svg>
             {isOpen && <span className="text-lg">Ventas</span>}
           </Link>

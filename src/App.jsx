@@ -1,6 +1,10 @@
-// src/App.js
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 
 // Importar Firestore y configuración
 import { db } from "./firebaseConfig";
@@ -33,8 +37,10 @@ import EditCompraForm from "./components/EditCompraForm";
 
 // Componentes para MercadoLibre
 import MercadoLibreConnections from "./components/MercadoLibreConnections";
-// Importar Publicaciones
+// Componente para Publicaciones
 import Publicaciones from "./components/Publicaciones";
+// Nuevo componente de Ventas
+import Ventas from "./components/Ventas";
 
 function App() {
   const [warehouses, setWarehouses] = useState([]);
@@ -393,6 +399,8 @@ function App() {
             <Route path="/mercadolibre" element={<MercadoLibreConnections />} />
             {/* Ruta de Publicaciones */}
             <Route path="/publicaciones" element={<Publicaciones />} />
+            {/* Nueva ruta de Ventas */}
+            <Route path="/ventas" element={<Ventas />} />
           </Routes>
         </div>
       </div>
