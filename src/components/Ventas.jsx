@@ -7,21 +7,21 @@ const Ventas = () => {
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState("");
 
-  // Helper para obtener la fecha actual truncada hasta la hora (minutos, segundos y ms en cero)
+  // Helper: Obtiene la fecha actual truncada hasta la hora (sin minutos, segundos ni ms)
   const getCurrentHourISOString = () => {
     const now = new Date();
     now.setMinutes(0, 0, 0);
-    // toISOString() devuelve algo como "2025-02-24T12:00:00.000Z".
-    // Reemplazamos la "Z" por "-00:00" para coincidir con el formato requerido.
+    // Ejemplo: "2025-02-24T12:00:00.000Z" se transforma en "2025-02-24T12:00:00.000-00:00"
     return now.toISOString().replace("Z", "-00:00");
   };
 
   // Fecha de inicio fija: 22 de enero de 2023 a las 00:00:00
   const fromDate = "2023-01-22T00:00:00.000-00:00";
 
-  // Función que consulta órdenes para una cuenta específica aplicando el filtro por fecha y status "paid"
+  // Función que consulta órdenes para una cuenta específica utilizando el filtro por fecha y status "paid"
   const fetchOrdersForAccount = async (accessToken, sellerId, nickname) => {
     const toDate = getCurrentHourISOString();
+    // Se arma la URL siguiendo el ejemplo de la documentación
     const ordersUrl = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${encodeURIComponent(
       fromDate
     )}&order.date_created.to=${encodeURIComponent(
@@ -40,7 +40,7 @@ const Ventas = () => {
       }
       const data = await response.json();
       if (data.results) {
-        // Se añade el nickname a cada orden para identificar la cuenta
+        // Se agrega el nickname de la cuenta a cada orden para diferenciar
         return data.results.map((order) => ({
           ...order,
           account: nickname,
@@ -88,7 +88,7 @@ const Ventas = () => {
   useEffect(() => {
     // Carga inicial de órdenes
     fetchAllOrders();
-    // Configura polling cada 60 segundos para actualizar en tiempo real
+    // Configura polling cada 60 segundos para mantener actualizada la información
     const intervalId = setInterval(() => {
       fetchAllOrders();
     }, 60000);
