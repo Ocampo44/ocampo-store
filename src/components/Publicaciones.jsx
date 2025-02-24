@@ -53,7 +53,7 @@ const Publicaciones = () => {
     return allIds;
   };
 
-  // Obtener publicaciones de cada cuenta usando el modo scan
+  // Obtener publicaciones de cada cuenta usando el modo scan y actualizarlas en tiempo real
   useEffect(() => {
     const fetchPublicaciones = async () => {
       // Reiniciamos las publicaciones para evitar acumulaciones previas
@@ -90,14 +90,14 @@ const Publicaciones = () => {
                 userNickname: nickname,
               }));
 
-            // Actualizamos el estado de forma incremental para mostrar los nuevos lotes conforme se reciben
+            // Se actualiza el estado de forma incremental para que cada lote se muestre en la UI
             setPublicaciones((prevPublicaciones) => [...prevPublicaciones, ...validItems]);
           }
         } catch (error) {
           console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
       }
-      // Reiniciar la paginación cuando finalice la carga
+      // Reiniciamos la paginación una vez finalizada la carga (opcional)
       setCurrentPage(1);
     };
 
