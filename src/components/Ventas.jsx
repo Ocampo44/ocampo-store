@@ -1,3 +1,4 @@
+// Ventas.jsx
 import React, { useEffect, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebaseConfig";
@@ -6,7 +7,7 @@ const Ventas = () => {
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState("");
 
-  // Helper: Obtiene la fecha actual truncada hasta la hora (sin minutos, segundos ni ms)
+  // Helper: Obtiene la fecha actual truncada hasta la hora
   const getCurrentHourISOString = () => {
     const now = new Date();
     now.setMinutes(0, 0, 0);
@@ -29,6 +30,14 @@ const Ventas = () => {
         console.error(`Error al obtener órdenes para ${nickname}:`, response.status);
         return [];
       }
+
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error(`Respuesta no JSON para ${nickname}:`, text);
+        return [];
+      }
+
       const data = await response.json();
       if (data.results) {
         return data.results.map((order) => ({
@@ -103,9 +112,7 @@ const Ventas = () => {
                 <td style={styles.td}>{order.id}</td>
                 <td style={styles.td}>{order.account}</td>
                 <td style={styles.td}>
-                  {order.date_created
-                    ? new Date(order.date_created).toLocaleString()
-                    : "N/A"}
+                  {order.date_created ? new Date(order.date_created).toLocaleString() : "N/A"}
                 </td>
                 <td style={styles.td}>{order.status || "N/A"}</td>
               </tr>
@@ -154,7 +161,7 @@ const styles = {
     padding: "10px",
   },
   tr: {
-    // Opcional: se pueden alternar colores de fondo para mayor legibilidad
+    // Puedes agregar estilos para alternar colores si lo deseas
   },
   noOrders: {
     textAlign: "center",

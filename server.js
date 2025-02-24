@@ -10,7 +10,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Endpoint para hacer proxy a la API de MercadoLibre
 app.get("/api/proxyOrders", async (req, res) => {
   const { seller, fromDate, toDate } = req.query;
   const accessToken = process.env.ML_ACCESS_TOKEN;
@@ -21,11 +20,7 @@ app.get("/api/proxyOrders", async (req, res) => {
   }
 
   // Construir la URL para la API de MercadoLibre
-  const ordersUrl = `https://api.mercadolibre.com/orders/search?seller=${seller}&order.date_created.from=${encodeURIComponent(
-    fromDate
-  )}&order.date_created.to=${encodeURIComponent(
-    toDate
-  )}&order.status=paid&sort=date_desc`;
+  const ordersUrl = `https://api.mercadolibre.com/orders/search?seller=${seller}&order.date_created.from=${encodeURIComponent(fromDate)}&order.date_created.to=${encodeURIComponent(toDate)}&order.status=paid&sort=date_desc`;
 
   console.log("URL de la API:", ordersUrl);
 
@@ -36,24 +31,18 @@ app.get("/api/proxyOrders", async (req, res) => {
       },
     });
 
-    console.log("Response status:", response.status);
-    console.log("Response content-type:", response.headers.get("content-type"));
-
-    // Leer la respuesta completa para depuración
-    const responseText = await response.text();
-    console.log("Response body:", responseText);
-
-    // Verificar que la respuesta sea JSON
-    if (!response.headers.get("content-type")?.includes("application/json")) {
-      console.error("Error: Respuesta no es JSON");
+    // Verifica que la respuesta sea de tipo JSON
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const responseText = await response.text();
+      console.error("Respuesta no JSON:", responseText);
       return res.status(500).json({
         error: "Respuesta no válida de MercadoLibre",
-        details: "No es JSON",
+        details: responseText,
       });
     }
 
-    // Convertir la respuesta a JSON y devolverla
-    const data = JSON.parse(responseText);
+    const data = await response.json();
     res.status(200).json(data);
   } catch (error) {
     console.error("Error interno en proxyOrders:", error);
