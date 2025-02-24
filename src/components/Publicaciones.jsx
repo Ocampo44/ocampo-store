@@ -56,7 +56,8 @@ const Publicaciones = () => {
   // Obtener publicaciones de cada cuenta usando el modo scan
   useEffect(() => {
     const fetchPublicaciones = async () => {
-      let todasLasPublicaciones = [];
+      // Reiniciamos las publicaciones para evitar acumulaciones previas
+      setPublicaciones([]);
 
       for (const cuenta of cuentas) {
         const accessToken = cuenta.token?.access_token;
@@ -89,13 +90,14 @@ const Publicaciones = () => {
                 userNickname: nickname,
               }));
 
-            todasLasPublicaciones = [...todasLasPublicaciones, ...validItems];
+            // Actualizamos el estado de forma incremental para mostrar los nuevos lotes conforme se reciben
+            setPublicaciones((prevPublicaciones) => [...prevPublicaciones, ...validItems]);
           }
         } catch (error) {
           console.error("Error al traer publicaciones para la cuenta:", cuenta.id, error);
         }
       }
-      setPublicaciones(todasLasPublicaciones);
+      // Reiniciar la paginación cuando finalice la carga
       setCurrentPage(1);
     };
 
