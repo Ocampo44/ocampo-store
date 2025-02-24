@@ -10,7 +10,6 @@ const Ventas = () => {
   const getCurrentHourISOString = () => {
     const now = new Date();
     now.setMinutes(0, 0, 0);
-    // Ejemplo: "2025-02-24T12:00:00.000Z" se transforma en "2025-02-24T12:00:00.000-00:00"
     return now.toISOString().replace("Z", "-00:00");
   };
 
@@ -20,7 +19,6 @@ const Ventas = () => {
   // Función que consulta órdenes para una cuenta específica usando el proxy
   const fetchOrdersForAccount = async (sellerId, nickname) => {
     const toDate = getCurrentHourISOString();
-    // Llamada a nuestro endpoint proxy utilizando template literal
     const proxyUrl = `/api/proxyOrders?seller=${sellerId}&fromDate=${encodeURIComponent(
       fromDate
     )}&toDate=${encodeURIComponent(toDate)}`;
@@ -33,7 +31,6 @@ const Ventas = () => {
       }
       const data = await response.json();
       if (data.results) {
-        // Se agrega el nickname de la cuenta a cada orden para diferenciar
         return data.results.map((order) => ({
           ...order,
           account: nickname,
@@ -51,7 +48,6 @@ const Ventas = () => {
     try {
       const usersSnapshot = await getDocs(collection(db, "mercadolibreUsers"));
       let totalOrders = 0;
-      // Reiniciamos el estado para evitar duplicados en cada llamada
       setOrders([]);
 
       usersSnapshot.forEach((docSnap) => {
@@ -59,7 +55,6 @@ const Ventas = () => {
         const sellerId = userData.profile?.id;
         const nickname = userData.profile?.nickname || "Sin Nombre";
 
-        // Solo hacemos la llamada si existe un sellerId válido
         if (sellerId) {
           fetchOrdersForAccount(sellerId, nickname)
             .then((newOrders) => {
@@ -81,13 +76,10 @@ const Ventas = () => {
   };
 
   useEffect(() => {
-    // Carga inicial de órdenes
     fetchAllOrders();
-    // Configura polling cada 60 segundos para mantener actualizada la información
     const intervalId = setInterval(() => {
       fetchAllOrders();
     }, 60000);
-
     return () => clearInterval(intervalId);
   }, []);
 

@@ -170,7 +170,6 @@ const MercadoLibreConnections = () => {
         if (renewAccountId) localStorage.removeItem("renewAccountId");
       };
       processCode();
-      // Limpiar la URL para evitar reprocesamiento
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
